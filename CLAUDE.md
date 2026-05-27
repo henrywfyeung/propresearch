@@ -85,9 +85,9 @@ with a defined degraded mode for others.
 ## 2. Stack & version pins
 
 ### 2.1 Runtime
-- Node.js **22.x LTS**
+- Node.js **24.x LTS** (krypton)
 - pnpm **9.x**
-- ES2023, `module=esnext`
+- ES2022, `module=esnext` (drizzle-kit's bundled esbuild rejects ES2023; ES2022 covers everything we use)
 - TypeScript **5.6.x**, `strict: true`, `noUncheckedIndexedAccess: true`
 
 ### 2.2 Production dependencies (exact-pinned, no ranges, no `latest`)
@@ -1441,7 +1441,7 @@ IDs/timestamps. 8 px base spacing.
 All third-party API keys (`DOMAIN_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `GOOGLE_MAPS_KEY`, `MAPBOX_TOKEN`, `RESEND_API_KEY`,
 `R2_ACCESS_KEY`/`R2_SECRET_KEY`, `INNGEST_SIGNING_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`) are rotated **quarterly** as a baseline
+`SUPABASE_SECRET_KEY`) are rotated **quarterly** as a baseline
 and **immediately** on any suspected leak. Procedure documented in
 `docs/runbooks/key-rotation.md`:
 1. Mint new key in the provider console.
@@ -1459,8 +1459,11 @@ WORKER_DATABASE_URL=postgresql://...?pgbouncer=false        # session mode (Inng
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
+# Note: new API key format (Supabase, early 2025). Replaces the legacy
+# `anon` JWT (now → publishable) and `service_role` JWT (now → secret).
+# `@supabase/supabase-js >= 2.45` and `@supabase/ssr >= 0.4` support both formats.
 
 # Domain
 DOMAIN_API_KEY=...

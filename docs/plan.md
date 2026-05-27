@@ -1194,7 +1194,7 @@ clears its `state`. PDF still downloads.
 
 **Files:** `src/lib/admin/purgeUserData.ts`,
 `docs/runbooks/offboarding.md`, `docs/runbooks/key-rotation.md`,
-`src/app/api/admin/purge-user/route.ts` (service-role-key auth only).
+`src/app/api/admin/purge-user/route.ts` (Supabase secret-key auth only — uses `SUPABASE_SECRET_KEY`, the post-2025 replacement for `service_role`).
 
 **What:**
 1. Implement `purgeUserData(userId)` per CLAUDE.md §10.1.1 — R2 first,

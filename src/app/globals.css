@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-bg text-ink;
+  }
+
+  body {
+    @apply font-sans;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Monetary / metric cells use tabular-nums everywhere (CLAUDE.md §13.4). */
+  .money,
+  .metric {
+    font-variant-numeric: tabular-nums;
+  }
+}
