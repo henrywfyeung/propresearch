@@ -2,7 +2,6 @@
 // key tables exist with the columns CLAUDE.md §4.2 names. Cheap canary for
 // the build pipeline; deeper schema tests come with each Phase B/C task.
 
-import { describe, expect, it } from 'vitest';
 import {
   allowedEmails,
   llmCalls,
@@ -11,6 +10,7 @@ import {
   reports,
   users,
 } from '@/db/schema';
+import { describe, expect, it } from 'vitest';
 
 describe('schema', () => {
   it('exports the core tables', () => {
