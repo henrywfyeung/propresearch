@@ -104,7 +104,7 @@ Renovate auto-PRs upgrades behind CI. `[R9]`
 | @langchain/langgraph-checkpoint-postgres | 0.0.4 |
 | ai | 4.0.3 |
 | @ai-sdk/openai | 1.0.5 |
-| zod | 3.23.8 |
+| zod | 3.25.76 |
 | ts-pattern | 5.5.0 |
 | date-fns | 4.1.0 |
 | p-retry | 6.2.0 |
