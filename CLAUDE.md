@@ -1046,8 +1046,12 @@ async function callWithFallback<T>(opts: StructuredCallOpts<T>): Promise<T> {
 ### 10.1 Supabase config
 - Google provider enabled
 - Redirect URLs restricted to **production + `http://localhost:3000`**
-- **JWT expiry: 4 hours** (was 24 h — shortened so allow-list revocation takes
-  effect within a working day).
+- **JWT expiry: ≤ 4 hours.** Supabase's current default is 1 h (3600 s),
+  which already beats the original 4 h target — leave the default unless
+  it shows the legacy 24 h, in which case set ≤ 14400 s. Note this is only
+  a *backstop*: the real allow-list revocation path is the middleware
+  re-check with a 60 s cache (§10.3), so a removed user is bounced within
+  ~1 min regardless of JWT lifetime.
 
 ### 10.1.1 User offboarding — data deletion
 Removing a row from `allowed_emails` blocks the user's next request
@@ -1112,33 +1116,44 @@ base-uri 'self';
 CSP violation reports POST to a Sentry endpoint so we see breakage.
 Tighten over time once stable.
 
-### 10.3 Middleware-based route protection (allow-list re-checked)
-```ts
-// middleware.ts
-import { createMiddlewareClient } from '@supabase/ssr';
-import { NextResponse } from 'next/server';
-import { isAllowedCached } from '@/lib/auth/allowlist';
+### 10.3 Route protection — Edge session gate + Node allow-list gate `[R5]`
 
-export async function middleware(req) {
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.redirect(new URL('/login', req.url));
+> **Implementation reality (deviation from the original single-middleware
+> design).** Next.js 15.0.3 middleware runs on the **Edge runtime**, which
+> can't use `postgres-js` (needs Node TCP sockets). The allow-list lives in
+> Postgres and we query it via Drizzle, so the DB re-check **cannot** run in
+> middleware. We also don't use Supabase's Data API/PostgREST (§4.3), so
+> `supabase.from('allowed_emails')` isn't available either. The original
+> spec's `createMiddlewareClient` + in-middleware `isAllowedCached` is not
+> achievable on this runtime. We split the concern into two gates — which is
+> also what Supabase officially recommends (middleware = session refresh;
+> authorization = elsewhere).
 
-  // R5: re-check allow-list on every request (60s in-memory cache)
-  if (!(await isAllowedCached(session.user.email!))) {
-    await supabase.auth.signOut();
-    return NextResponse.redirect(new URL('/login?error=not_allowed', req.url));
-  }
-  return res;
-}
+**Gate 1 — Edge middleware (`middleware.ts` + `src/lib/auth/middleware.ts`).**
+Refreshes the Supabase session on every request via `getUser()` (an HTTPS
+call to Supabase Auth — Edge-safe, and algorithm-agnostic so the 2025
+JWT-signing-keys migration is transparent). Redirects unauthenticated traffic
+to `/login`. No DB access. Matcher excludes `_next/*`, image/font assets, and
+`api/inngest` (own signature auth, [R45]); `/login` and `/auth/*` are treated
+as public inside the handler.
 
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon|public|login|api/inngest).*)'],
-};
-```
-`[R5]` `isAllowedCached` uses a 60-second in-memory cache so revocations take
-effect within a minute, without hammering Postgres on every request.
+**Gate 2 — Node allow-list re-check (`requireAllowedUser()` in
+`src/lib/auth/user.ts`).** Every protected Server Component / Server Action
+calls this. It (a) confirms the session via `getUser()`, (b) re-checks the
+allow-list through `isAllowedCached` (60 s TTL, Drizzle), (c) on failure
+`signOut()` + `redirect('/login?error=not_allowed')`, (d) `upsertUser` and
+returns the local `users.id`. This is the revocation path.
+
+**Primary gate — `/auth/callback`.** The callback (§10.2) calls `isAllowed`
+(uncached) before any session is usable. A de-listed account can never reach
+an authenticated surface in the first place; Gate 2 only matters for
+revoking an *already-signed-in* user, and does so within the 60 s cache
+window on next navigation to a protected page.
+
+`isAllowedCached` uses a 60-second in-memory TTL cache so revocations take
+effect within a minute without hammering Postgres. The cache is per-process,
+so on Vercel the effective revocation latency is "≤ 60 s per warm instance"
+(§10.1). Unit-tested in `tests/unit/allowlist.test.ts`.
 
 ---
 
