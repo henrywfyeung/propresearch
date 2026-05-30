@@ -7,6 +7,7 @@ import { DomainQuotaError, SchemaDriftError } from '@/lib/errors';
 import { logger } from '@/lib/observability/logger';
 import pRetry, { AbortError } from 'p-retry';
 import type { z } from 'zod';
+import { getDomainAccessToken } from './auth';
 
 const DOMAIN_BASE_URL = 'https://api.domain.com.au';
 export const DOMAIN_CALLS_PER_REPORT = 50; // §11.2
@@ -62,8 +63,8 @@ export async function domainCall<T>(endpoint: string, opts: DomainCallOpts<T>): 
     }
   }
 
-  const apiKey = process.env.DOMAIN_API_KEY;
-  if (!apiKey) throw new Error('DOMAIN_API_KEY is not set');
+  // OAuth2 client-credentials bearer (cached ~12h) — see ./auth.ts.
+  const accessToken = await getDomainAccessToken();
 
   const url = new URL(endpoint.startsWith('http') ? endpoint : `${DOMAIN_BASE_URL}${endpoint}`);
   let body: string | undefined;
@@ -80,7 +81,7 @@ export async function domainCall<T>(endpoint: string, opts: DomainCallOpts<T>): 
       const res = await fetch(url.toString(), {
         method,
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },

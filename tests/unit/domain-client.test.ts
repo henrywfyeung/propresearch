@@ -6,8 +6,14 @@ import { DomainQuotaError, SchemaDriftError } from '@/lib/errors';
 import { domainCall } from '@/tools/domain/client';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
+// Isolate the client from the OAuth token manager — auth is covered by its
+// own test. Here getDomainAccessToken always returns a fixed token.
+vi.mock('@/tools/domain/auth', () => ({
+  getDomainAccessToken: vi.fn().mockResolvedValue('test-access-token'),
+}));
 
 const OkSchema = z.object({ ok: z.literal(true) });
 const server = setupServer();
