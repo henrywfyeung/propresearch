@@ -6,9 +6,9 @@
 import { z } from 'zod';
 
 export const ProviderSchema = z.enum([
-  'domain',
+  'rea', // realestate.com.au via the realty-base-au RapidAPI proxy (comp source)
   'nsw-vg',
-  'domain+nsw-vg', // merged comp per the NSW VG vs Domain tiebreaker [R40]
+  'rea+nsw-vg', // merged comp: REA attrs/photos + NSW VG authoritative price (spec §5.4)
   'mapbox',
   'street-view',
   'nsw-planning',

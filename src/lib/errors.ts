@@ -42,6 +42,13 @@ export class DomainQuotaError extends AppError {
   }
 }
 
+/** Per-report RapidAPI call ceiling exceeded (spec §6). */
+export class RapidApiQuotaError extends AppError {
+  constructor(message = 'RapidAPI call ceiling reached for this report', details?: unknown) {
+    super('RAPIDAPI_QUOTA_PER_REPORT', message, { details });
+  }
+}
+
 /** Per-report LLM cost ceiling exceeded (§11.3). */
 export class CostCeilingError extends AppError {
   constructor(message = 'Cost ceiling reached', details?: unknown) {
