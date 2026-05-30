@@ -16,7 +16,7 @@ import { PointerUnresolvedError } from '@/lib/errors';
  * Build a LangGraph reducer that merges incoming items into existing ones by
  * a key field (per-field last-write-wins), preserving untouched entries.
  */
-export function mergeByKey<T extends Record<string, unknown>>(keyField: keyof T) {
+export function mergeByKey<T extends object>(keyField: keyof T) {
   return (current: T[] | undefined, incoming: T[] | undefined): T[] => {
     const byKey = new Map<unknown, T>();
     for (const item of current ?? []) {
