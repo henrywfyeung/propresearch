@@ -3,7 +3,12 @@
 // errors append, singletons last-value.
 
 import { appendReducer, mergeByKey } from '@/agents/state';
-import type { Comparable, ResolvedAddress, SubjectProperty } from '@/schemas/state';
+import type {
+  Comparable,
+  ResolvedAddress,
+  SubjectProperty,
+  TriangulatedValue,
+} from '@/schemas/state';
 import { Annotation } from '@langchain/langgraph';
 
 export const GraphAnnotation = Annotation.Root({
@@ -20,6 +25,10 @@ export const GraphAnnotation = Annotation.Root({
   comparables: Annotation<Comparable[]>({
     reducer: mergeByKey<Comparable>('id'),
     default: () => [],
+  }),
+  triangulation: Annotation<TriangulatedValue | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
   }),
   errors: Annotation<{ code: string; message: string }[]>({
     reducer: appendReducer,
