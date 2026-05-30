@@ -1,0 +1,61 @@
+// src/prompts/compose.ts — Node 10 section prompts (CLAUDE.md §7.12). Bump
+// `version` on wording changes ([R30]). Output is text-only narrative blocks;
+// the node stamps the structured valuation claim.
+
+import type { LlmMessage } from '@/tools/llm/types';
+
+export const version = 'v1.0';
+
+export type ComposeSection = 'summary' | 'subject' | 'valuation' | 'comparables';
+
+export interface ComposeInput {
+  suburb: string;
+  subjectAttrs: {
+    beds: number;
+    baths: number;
+    parking: number;
+    landArea: number | null;
+    buildingArea: number | null;
+    propertyType: string;
+  };
+  triangulation: {
+    compDerived: number;
+    low: number;
+    high: number;
+    reconciled: number;
+    confidence: 'high' | 'medium' | 'low';
+    spread: number;
+  } | null;
+  selectedComps: Array<{
+    id: string;
+    address: string;
+    salePrice: number;
+    adjustedValue: number | null;
+    contractDate: string;
+    beds: number;
+    baths: number;
+    propertyType: string;
+    selection: string;
+  }>;
+}
+
+const VOICE =
+  'Voice: direct, confident, specific. No marketing language. Plain Australian English. Prices in AUD. Output ONLY a JSON array of {"type":"text","text":"..."} blocks of narrative prose.';
+
+const SECTION_BRIEF: Record<ComposeSection, string> = {
+  summary:
+    'Write the executive summary: the headline verdict on the property and where its value sits.',
+  subject: 'Describe the subject property from its attributes (beds, baths, parking, land, type).',
+  valuation:
+    'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer.',
+  comparables: 'Walk through the selected comparable sales and why they were chosen.',
+};
+
+export function buildMessages(section: ComposeSection, input: ComposeInput): LlmMessage[] {
+  const system = `You are writing the "${section}" section of a residential property research dossier. ${SECTION_BRIEF[section]} ${VOICE}`;
+  const user = `Suburb: ${input.suburb}\nSubject attributes: ${JSON.stringify(input.subjectAttrs)}\nValuation: ${JSON.stringify(input.triangulation)}\nSelected comparables: ${JSON.stringify(input.selectedComps)}`;
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}
