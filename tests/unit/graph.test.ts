@@ -1,5 +1,6 @@
 // tests/unit/graph.test.ts
 import { runGraph } from '@/agents/graph';
+import { callWithFallback } from '@/tools/llm/structuredCall';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -11,6 +12,9 @@ import {
   sampleRawAddress,
   sampleSubject,
 } from '../fixtures/comps';
+
+vi.mock('@/tools/llm/structuredCall', () => ({ callWithFallback: vi.fn() }));
+const mockLlm = vi.mocked(callWithFallback);
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -25,6 +29,37 @@ beforeEach(() => {
   process.env.MAPBOX_TOKEN = 'test-token';
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-05-30T00:00:00Z'));
+  mockLlm.mockReset();
+  mockLlm.mockResolvedValue({
+    decisions: [
+      {
+        compId: 'NEAR',
+        selection: 'fair-value',
+        rejectionReason: null,
+        adjustments: [
+          {
+            dimension: 'land-area',
+            delta: 0.05,
+            rationale: 'subject parcel is slightly larger than this comp',
+          },
+        ],
+        adjustmentNarrative:
+          'Adjusted modestly; otherwise a close like-for-like comparison overall here.',
+        adjustedValue: 2_600_000,
+        selectionRationale: 'Close match on beds, baths and proximity to the subject.',
+      },
+      {
+        compId: 'FAR',
+        selection: 'rejected',
+        rejectionReason: 'too far and bedroom count differs',
+        adjustments: [],
+        adjustmentNarrative:
+          'Rejected: distance and bedroom mismatch make this an unreliable comparison here.',
+        adjustedValue: 4_000_000,
+        selectionRationale: 'Excluded from the fair-value set due to distance and size mismatch.',
+      },
+    ],
+  });
 });
 
 const input = { reportId: 'r1', rawAddress: sampleRawAddress, subject: sampleSubject };
@@ -39,6 +74,7 @@ describe('reportGraph', () => {
     const state = await runGraph(input);
     expect(state.resolvedAddress?.suburb).toBe('Mosman');
     expect(state.comparables.map((c) => c.id)).toEqual(['NEAR', 'FAR']);
+    expect(state.comparables.find((c) => c.id === 'NEAR')?.selection).toBe('fair-value');
     expect(state.errors).toEqual([]);
   });
 
