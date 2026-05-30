@@ -2,13 +2,11 @@
 // this; decisions are merged back into state.comparables[i].
 
 import { z } from 'zod';
-import { SourceRefSchema } from './sources';
 
 export const ReasonSelectAdjustmentSchema = z.object({
-  dimension: z.string(), // 'land-area' | 'condition' | 'aspect' | ...
-  delta: z.number().min(-0.3).max(0.3), // % as decimal
+  dimension: z.string(),
+  delta: z.number().min(-0.3).max(0.3),
   rationale: z.string().min(20),
-  sourceRef: SourceRefSchema,
 });
 
 export const ComparableDecisionSchema = z.object({
