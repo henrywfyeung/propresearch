@@ -8,6 +8,7 @@ import { Annotation } from '@langchain/langgraph';
 
 export const GraphAnnotation = Annotation.Root({
   reportId: Annotation<string>(),
+  rawAddress: Annotation<string>(),
   resolvedAddress: Annotation<ResolvedAddress | null>({
     reducer: (_current, update) => update,
     default: () => null,

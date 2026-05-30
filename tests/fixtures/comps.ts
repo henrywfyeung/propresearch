@@ -93,10 +93,13 @@ export const sampleSubject: SubjectProperty = {
   streetView: null,
 };
 
+export const sampleRawAddress = '1 Awaba St, Mosman NSW 2088';
+
 /** Build a full GraphState, overriding any channel. */
 export function graphState(over: Partial<GraphState> = {}): GraphState {
   return {
     reportId: 'r1',
+    rawAddress: '',
     resolvedAddress: sampleResolvedAddress,
     subject: sampleSubject,
     comparables: [],
