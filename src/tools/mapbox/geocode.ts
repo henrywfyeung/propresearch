@@ -7,11 +7,23 @@ import { SchemaDriftError } from '@/lib/errors';
 import pRetry from 'p-retry';
 import { z } from 'zod';
 
+const MAPBOX_CONTEXT = z
+  .object({
+    region: z
+      .object({ name: z.string().optional(), region_code: z.string().optional() })
+      .optional(),
+    postcode: z.object({ name: z.string().optional() }).optional(),
+    locality: z.object({ name: z.string().optional() }).optional(),
+    place: z.object({ name: z.string().optional() }).optional(),
+  })
+  .optional();
+
 const MAPBOX_FEATURE = z.object({
   properties: z.object({
     full_address: z.string().optional(),
     name: z.string().optional(),
     coordinates: z.object({ longitude: z.number(), latitude: z.number() }).optional(),
+    context: MAPBOX_CONTEXT,
   }),
   geometry: z.object({
     type: z.literal('Point'),
@@ -29,6 +41,9 @@ export interface GeocodeResult {
   /** Mapbox doesn't return a 0-1 confidence on v6; we proxy it as 1/rank. */
   confidence: number;
   matchedAddress: string | null;
+  suburb: string | null;
+  postcode: string | null;
+  state: string | null;
 }
 
 export async function forwardGeocode(address: string): Promise<GeocodeResult | null> {
@@ -61,10 +76,14 @@ export async function forwardGeocode(address: string): Promise<GeocodeResult | n
   if (!feature) return null;
 
   const [lng, lat] = feature.geometry.coordinates;
+  const ctx = feature.properties.context;
   return {
     lat,
     lng,
-    confidence: 1, // single best match; refine if we request more candidates
+    confidence: 1,
     matchedAddress: feature.properties.full_address ?? feature.properties.name ?? null,
+    suburb: ctx?.locality?.name ?? ctx?.place?.name ?? null,
+    postcode: ctx?.postcode?.name ?? null,
+    state: ctx?.region?.region_code ?? null,
   };
 }
