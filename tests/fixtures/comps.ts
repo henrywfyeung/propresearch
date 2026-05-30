@@ -70,7 +70,6 @@ export function mockReaBlocked(server: Server) {
 }
 
 export const sampleResolvedAddress: ResolvedAddress = {
-  domainPropertyId: 'p1',
   lat: -33.82,
   lng: 151.24,
   suburb: 'Mosman',
@@ -92,18 +91,6 @@ export const sampleSubject: SubjectProperty = {
   listing: null,
   visionAnalysis: null,
   streetView: null,
-  domainAvm: {
-    low: 0,
-    mid: 0,
-    high: 0,
-    confidence: 'low',
-    source: {
-      provider: 'derived',
-      endpoint: 'seed',
-      fetchedAt: '2026-05-30T00:00:00.000Z',
-      path: '/subject',
-    },
-  },
 };
 
 /** Build a full GraphState, overriding any channel. */

@@ -13,8 +13,16 @@ import { CompVisionSchema, StreetViewSchema, SubjectVisionSchema } from './visio
 
 export const AusStateSchema = z.enum(['NSW', 'VIC', 'WA']);
 
+export const CanonicalPropertyTypeSchema = z.enum([
+  'House',
+  'ApartmentUnitFlat',
+  'Townhouse',
+  'Villa',
+  'Land',
+  'Other',
+]);
+
 export const ResolvedAddressSchema = z.object({
-  domainPropertyId: z.string(),
   gnafId: z.string().optional(),
   lat: z.number(),
   lng: z.number(),
@@ -34,14 +42,6 @@ export const PropertyAttrsSchema = z.object({
   propertyType: z.string(),
 });
 
-export const DomainAvmSchema = z.object({
-  low: z.number(),
-  mid: z.number(),
-  high: z.number(),
-  confidence: z.enum(['high', 'medium', 'low']),
-  source: SourceRefSchema,
-});
-
 export const ListingSchema = z.object({
   listingId: z.string(),
   url: z.string().url(),
@@ -57,7 +57,6 @@ export const SubjectPropertySchema = z.object({
   listing: ListingSchema.nullable(),
   visionAnalysis: SubjectVisionSchema.nullable(),
   streetView: StreetViewSchema.nullable(),
-  domainAvm: DomainAvmSchema,
 });
 export type SubjectProperty = z.infer<typeof SubjectPropertySchema>;
 
