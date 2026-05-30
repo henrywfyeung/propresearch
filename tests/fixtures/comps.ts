@@ -1,6 +1,6 @@
 // tests/fixtures/comps.ts — shared REA MSW mocks + graph-state fixtures.
 import type { GraphState } from '@/agents/annotation';
-import type { ResolvedAddress, SubjectProperty } from '@/schemas/state';
+import type { Comparable, ResolvedAddress, SubjectProperty } from '@/schemas/state';
 import { http, HttpResponse } from 'msw';
 import type { setupServer } from 'msw/node';
 
@@ -130,4 +130,32 @@ export function mockMapbox(server: ReturnType<typeof setupServer>) {
       }),
     ),
   );
+}
+
+export function sampleComparable(id: string, over: Partial<Comparable> = {}): Comparable {
+  return {
+    id,
+    address: `${id} St, Mosman NSW 2088`,
+    salePrice: 2_500_000,
+    contractDate: '2026-03-01',
+    distanceM: 300,
+    beds: 3,
+    baths: 2,
+    landArea: 500,
+    propertyType: 'House',
+    photos: [],
+    visionAnalysis: null,
+    similarityScore: 80,
+    selection: 'candidate',
+    adjustments: [],
+    adjustedValue: null,
+    adjustmentNarrative: null,
+    source: {
+      provider: 'rea',
+      endpoint: '/properties/search?channel=sold',
+      fetchedAt: '2026-05-30T00:00:00.000Z',
+      path: '/comparables/0/salePrice',
+    },
+    ...over,
+  };
 }
