@@ -93,3 +93,39 @@ export function toComparable(l: ReaSoldListing, subject: LatLng): Comparable | n
     source,
   };
 }
+
+// --- sold-comp assembly -------------------------------------------------
+
+export interface FetchReaCompsOpts {
+  /** REA locationId, e.g. 'suburb:Mosman, NSW 2088' (from reaAutoComplete). */
+  locationId: string;
+  /** Subject coordinates (from resolvedAddress) for distance scoring. */
+  subject: LatLng;
+  /** Sold-within window in days (default 180, per §7.3). */
+  withinDays?: number;
+  /** Max sold pages to fetch (default 3 → ~75 candidates). */
+  maxPages?: number;
+}
+
+/**
+ * Fetch recent sold comparables for a suburb: paginate the REA sold channel,
+ * normalize, drop unusable, filter to `withinDays`, dedupe by id. Returns
+ * candidate Comparables (unranked); Node 03 applies similarityScore + selection.
+ */
+export async function fetchReaSoldComparables(opts: FetchReaCompsOpts): Promise<Comparable[]> {
+  const { locationId, subject, withinDays = 180, maxPages = 3 } = opts;
+  const cutoff = Date.now() - withinDays * 86_400_000;
+  const byId = new Map<string, Comparable>();
+
+  for (let page = 1; page <= maxPages; page++) {
+    const listings = await reaSearchSold(locationId, page);
+    if (listings.length === 0) break;
+    for (const l of listings) {
+      const c = toComparable(l, subject);
+      if (!c) continue;
+      if (new Date(c.contractDate).getTime() < cutoff) continue;
+      if (!byId.has(c.id)) byId.set(c.id, c);
+    }
+  }
+  return Array.from(byId.values());
+}
