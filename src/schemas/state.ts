@@ -146,25 +146,19 @@ export type RiskFlag = z.infer<typeof RiskFlagSchema>;
 
 export const TriangulatedValueSchema = z
   .object({
-    domainAvm: z.number(),
-    domainAvmConfidence: z.enum(['high', 'medium', 'low']),
-    compDerived: z.number(),
-    rentalImplied: z.number().nullable(), // null when rentals unavailable
-    reconciled: z.number(),
+    compDerived: z.number(), // similarity-weighted mean of fair-value comps' adjustedValue
+    low: z.number(),
+    high: z.number(),
+    reconciled: z.number(), // = compDerived in v2 (single signal)
     confidence: z.enum(['high', 'medium', 'low']),
-    spread: z.number().min(0), // (max-min)/median, derived + validated
-    weights: z
-      .record(z.string(), z.number())
-      .refine(
-        (w) => Math.abs(Object.values(w).reduce((a, b) => a + b, 0) - 1) < 0.01,
-        'triangulation weights must sum to 1.0',
-      ),
+    spread: z.number().min(0), // (high - low) / median
+    compIds: z.array(z.string()),
     uncertaintyNote: z.string().nullable(), // required when spread > 0.25
-    narrative: z.string().min(60),
+    narrative: z.string().min(40),
   })
   .refine(
     (v) => v.spread <= 0.25 || (v.confidence === 'low' && v.uncertaintyNote !== null),
-    'high spread (>0.25) requires confidence=low and a non-null uncertaintyNote',
+    'high spread (>0.25) requires confidence=low and an uncertaintyNote',
   );
 export type TriangulatedValue = z.infer<typeof TriangulatedValueSchema>;
 
