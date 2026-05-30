@@ -14,7 +14,9 @@
       "features": { "general": { "bedrooms": 1, "bathrooms": 1, "parkingSpaces": 1 } },
       "address": {
         "streetAddress": "12/22 Warringah Road",
-        "suburb": "Mosman", "state": "NSW", "postcode": "2088",
+        "suburb": "Mosman",
+        "state": "NSW",
+        "postcode": "2088",
         "location": { "latitude": -33.81835452, "longitude": 151.24535984 }
       },
       "mainImage": { "server": "https://i3.au.reastatic.net", "uri": "/main/image.jpg" },
@@ -31,8 +33,11 @@
       "landSize": { "value": 0.12, "unit": "ha" },
       "features": { "general": { "bedrooms": 4, "bathrooms": 2, "parkingSpaces": 2 } },
       "address": {
-        "streetAddress": "5 Example St", "suburb": "Mosman", "state": "NSW", "postcode": "2088",
-        "location": { "latitude": -33.8200, "longitude": 151.2460 }
+        "streetAddress": "5 Example St",
+        "suburb": "Mosman",
+        "state": "NSW",
+        "postcode": "2088",
+        "location": { "latitude": -33.82, "longitude": 151.246 }
       },
       "images": []
     }

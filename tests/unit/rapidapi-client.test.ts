@@ -46,7 +46,12 @@ describe('rapidApiCall', () => {
       }),
     );
     await runWithReportContext({ reportId: 'r2' }, () =>
-      rapidApiCall({ host: HOST, path: '/search', params: { q: 'Mosman', page: 2 }, schema: OkSchema }),
+      rapidApiCall({
+        host: HOST,
+        path: '/search',
+        params: { q: 'Mosman', page: 2 },
+        schema: OkSchema,
+      }),
     );
     expect(url).toContain('q=Mosman');
     expect(url).toContain('page=2');
@@ -68,7 +73,9 @@ describe('rapidApiCall', () => {
     server.use(
       http.get(`https://${HOST}/flaky`, () => {
         hits += 1;
-        return hits === 1 ? new HttpResponse(null, { status: 503 }) : HttpResponse.json({ ok: true });
+        return hits === 1
+          ? new HttpResponse(null, { status: 503 })
+          : HttpResponse.json({ ok: true });
       }),
     );
     const out = await runWithReportContext({ reportId: 'r4' }, () =>

@@ -23,9 +23,12 @@ describe('reaAutoComplete', () => {
         HttpResponse.json({
           status: true,
           data: [
-            { locationId: 'suburb:Mosman, NSW 2088', type: 'suburb',
+            {
+              locationId: 'suburb:Mosman, NSW 2088',
+              type: 'suburb',
               display: { text: 'Mosman, NSW 2088', subtext: 'Suburb' },
-              source: { name: 'Mosman', postcode: '2088', state: 'NSW' } },
+              source: { name: 'Mosman', postcode: '2088', state: 'NSW' },
+            },
           ],
         }),
       ),
@@ -55,7 +58,9 @@ describe('reaSearchSold', () => {
         return HttpResponse.json(soldPage);
       }),
     );
-    await runWithReportContext({ reportId: 'r3' }, () => reaSearchSold('suburb:Mosman, NSW 2088', 2));
+    await runWithReportContext({ reportId: 'r3' }, () =>
+      reaSearchSold('suburb:Mosman, NSW 2088', 2),
+    );
     expect(url).toContain('channel=sold');
     expect(url).toContain('page=2');
     expect(url).toContain('locationId=suburb');
