@@ -1,0 +1,95 @@
+// src/tools/comps/reaComps.ts
+// REA → Comparable normalization + sold-comp assembly. Spec §4-§5.
+
+import { type LatLng, haversineMeters } from '@/lib/geo';
+import type { SourceRef } from '@/schemas/sources';
+import type { Comparable } from '@/schemas/state';
+import { type ReaSoldListing, reaSearchSold } from '@/tools/rapidapi/rea';
+
+// REA propertyType vocab → the canonical vocab similarity scoring expects.
+// 'House' is load-bearing: similarityScore only applies the land-area term for
+// subject.propertyType === 'House' (src/tools/comps/similarity.ts).
+const PROPERTY_TYPE_MAP: Record<string, string> = {
+  house: 'House',
+  acreage: 'House',
+  acreagesemirural: 'House',
+  apartment: 'ApartmentUnitFlat',
+  unit: 'ApartmentUnitFlat',
+  flat: 'ApartmentUnitFlat',
+  unitapartment: 'ApartmentUnitFlat',
+  townhouse: 'Townhouse',
+  villa: 'Villa',
+  duplex: 'Townhouse',
+  land: 'Land',
+  residentialland: 'Land',
+};
+
+export function mapReaPropertyType(raw: string | null | undefined): string {
+  if (!raw) return 'Other';
+  return PROPERTY_TYPE_MAP[raw.toLowerCase().replace(/[^a-z]/g, '')] ?? 'Other';
+}
+
+/** Parse a single clean AUD amount; null for ranges / words / withheld. */
+export function parseAudPrice(display: string | null | undefined): number | null {
+  if (!display) return null;
+  const m = display.match(/^\s*\$?\s*([\d,]+)\s*$/) ?? display.match(/\$\s?([\d,]+)/);
+  if (!m) return null;
+  const n = Number((m[1] ?? '').replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function landToM2(landSize: ReaSoldListing['landSize']): number | null {
+  if (!landSize?.value) return null;
+  const u = (landSize.unit ?? 'm2').toLowerCase();
+  if (u === 'ha' || u.startsWith('hectare')) return Math.round(landSize.value * 10_000);
+  return landSize.value; // m2 / sqm
+}
+
+function photoUrls(l: ReaSoldListing, cap = 8): string[] {
+  return (l.images ?? []).map((i) => `${i.server}${i.uri}`).slice(0, cap);
+}
+
+/**
+ * Normalize one REA sold listing into a candidate Comparable, or null if it
+ * can't serve as a comp (no clean price, no sold date, or no geo). Ranking
+ * (similarityScore/selection) is left to the future Node 03.
+ */
+export function toComparable(l: ReaSoldListing, subject: LatLng): Comparable | null {
+  const salePrice = parseAudPrice(l.price?.display);
+  const contractDate = l.dateSold?.value ?? null;
+  const loc = l.address?.location;
+  if (salePrice == null || !contractDate || !loc) return null;
+
+  const g = l.features?.general ?? {};
+  const a = l.address ?? {};
+  const address = [a.streetAddress, a.suburb, a.state, a.postcode].filter(Boolean).join(', ');
+
+  const source: SourceRef = {
+    provider: 'rea',
+    endpoint: '/properties/search?channel=sold',
+    fetchedAt: new Date().toISOString(),
+    // Placeholder index; the consuming node fixes the index when it places the
+    // comp into state (the critic resolves final claim paths at compose time).
+    path: '/comparables/0/salePrice',
+  };
+
+  return {
+    id: l.listingId,
+    address,
+    salePrice,
+    contractDate,
+    distanceM: haversineMeters(subject, { lat: loc.latitude, lng: loc.longitude }),
+    beds: g.bedrooms ?? 0,
+    baths: g.bathrooms ?? 0,
+    landArea: landToM2(l.landSize),
+    propertyType: mapReaPropertyType(l.propertyType),
+    photos: photoUrls(l),
+    visionAnalysis: null,
+    similarityScore: 0,
+    selection: 'candidate',
+    adjustments: [],
+    adjustedValue: null,
+    adjustmentNarrative: null,
+    source,
+  };
+}

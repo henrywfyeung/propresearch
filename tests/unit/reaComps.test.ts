@@ -1,0 +1,80 @@
+// tests/unit/reaComps.test.ts
+import { ComparableSchema } from '@/schemas/state';
+import { mapReaPropertyType, parseAudPrice, toComparable } from '@/tools/comps/reaComps';
+import type { ReaSoldListing } from '@/tools/rapidapi/rea';
+import { describe, expect, it } from 'vitest';
+
+const SUBJECT = { lat: -33.8184, lng: 151.2454 };
+
+const base: ReaSoldListing = {
+  listingId: '150833140',
+  propertyType: 'apartment',
+  price: { display: '$1,030,000' },
+  dateSold: { display: '26 May 2026', value: '2026-05-26' },
+  landSize: { value: 787, unit: 'm2' },
+  features: { general: { bedrooms: 1, bathrooms: 1, parkingSpaces: 1 } },
+  address: {
+    streetAddress: '12/22 Warringah Road',
+    suburb: 'Mosman',
+    state: 'NSW',
+    postcode: '2088',
+    location: { latitude: -33.81835452, longitude: 151.24535984 },
+  },
+  images: [
+    { server: 'https://i3.au.reastatic.net', uri: '/a/image.jpg' },
+    { server: 'https://i3.au.reastatic.net', uri: '/b/image.jpg' },
+  ],
+};
+
+describe('mapReaPropertyType', () => {
+  it('maps to the canonical vocab used by similarity scoring', () => {
+    expect(mapReaPropertyType('house')).toBe('House');
+    expect(mapReaPropertyType('apartment')).toBe('ApartmentUnitFlat');
+    expect(mapReaPropertyType('townhouse')).toBe('Townhouse');
+    expect(mapReaPropertyType('something-weird')).toBe('Other');
+    expect(mapReaPropertyType(null)).toBe('Other');
+  });
+});
+
+describe('parseAudPrice', () => {
+  it('parses a clean dollar amount', () => {
+    expect(parseAudPrice('$1,030,000')).toBe(1030000);
+  });
+  it('returns null for withheld / non-numeric', () => {
+    expect(parseAudPrice('Price Withheld')).toBeNull();
+    expect(parseAudPrice('Contact Agent')).toBeNull();
+    expect(parseAudPrice(undefined)).toBeNull();
+  });
+});
+
+describe('toComparable', () => {
+  it('produces a schema-valid Comparable', () => {
+    const c = toComparable(base, SUBJECT);
+    expect(c).not.toBeNull();
+    expect(() => ComparableSchema.parse(c)).not.toThrow();
+    expect(c?.salePrice).toBe(1030000);
+    expect(c?.contractDate).toBe('2026-05-26');
+    expect(c?.propertyType).toBe('ApartmentUnitFlat');
+    expect(c?.beds).toBe(1);
+    expect(c?.landArea).toBe(787);
+    expect(c?.photos).toEqual([
+      'https://i3.au.reastatic.net/a/image.jpg',
+      'https://i3.au.reastatic.net/b/image.jpg',
+    ]);
+    expect(c?.distanceM).toBeLessThan(50); // same location
+    expect(c?.source.provider).toBe('rea');
+  });
+
+  it('converts hectares to m²', () => {
+    const c = toComparable({ ...base, landSize: { value: 0.12, unit: 'ha' } }, SUBJECT);
+    expect(c?.landArea).toBe(1200);
+  });
+
+  it('returns null when the price is withheld', () => {
+    expect(toComparable({ ...base, price: { display: 'Price Withheld' } }, SUBJECT)).toBeNull();
+  });
+
+  it('returns null when geo is missing', () => {
+    expect(toComparable({ ...base, address: { streetAddress: '1 X St' } }, SUBJECT)).toBeNull();
+  });
+});
