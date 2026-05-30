@@ -75,6 +75,7 @@ describe('reportGraph', () => {
     expect(state.resolvedAddress?.suburb).toBe('Mosman');
     expect(state.comparables.map((c) => c.id)).toEqual(['NEAR', 'FAR']);
     expect(state.comparables.find((c) => c.id === 'NEAR')?.selection).toBe('fair-value');
+    expect(state.triangulation?.reconciled).toBeGreaterThan(0);
     expect(state.errors).toEqual([]);
   });
 
