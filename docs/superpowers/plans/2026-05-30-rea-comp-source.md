@@ -74,8 +74,11 @@ Expected: PASS (no references to the removed files remain).
 
 - [ ] **Step 5: Commit**
 
+The deletions are already staged by `git rm` above. Commit just those — do NOT
+run `git add -A` (the owner has unrelated uncommitted `CLAUDE.md` changes that
+must not be swept in).
+
 ```bash
-git add -A
 git commit -m "refactor: remove unused Domain OAuth client (replaced by RapidAPI/REA)"
 ```
 
@@ -1091,13 +1094,16 @@ git commit -m "feat: fetchReaSoldComparables (paginate + 180d filter + dedupe)"
 
 ---
 
-## Task 8: Env example + docs pointer
+## Task 8: Env example
 
-Record the new env vars and point CLAUDE.md at the spec. Keep the CLAUDE.md edit **light** — there are uncommitted CLAUDE.md changes from the owner, so add a small pointer rather than rewriting sections (deeper supersession can fold into the owner's edits).
+Record the new env vars in `.env.example`. A CLAUDE.md pointer is intentionally
+**deferred**: the owner has uncommitted `CLAUDE.md` edits, and the design +
+accepted-risk are already fully documented in the committed spec. Folding a
+CLAUDE.md note into the owner's in-progress edits later avoids entangling
+unrelated uncommitted work in a docs commit.
 
 **Files:**
 - Create: `.env.example`
-- Modify: `CLAUDE.md` (add one pointer line near §4.3 / §8)
 
 - [ ] **Step 1: Create `.env.example`**
 
@@ -1112,28 +1118,16 @@ MAPBOX_TOKEN=
 GOOGLE_MAPS_KEY=
 ```
 
-- [ ] **Step 2: Add a pointer in `CLAUDE.md`**
+- [ ] **Step 2: Verify nothing broke**
 
-Find the §4.3 line that begins "What we use instead" and add, as a new sentence at the end of that paragraph:
+Run: `pnpm lint && pnpm typecheck && pnpm test`
+Expected: PASS (Biome ignores `.env.example`).
 
-```
-> **Comp source (2026-05): REA via the `realty-base-au` RapidAPI proxy.** NSW VG
-> stays the authoritative NSW price cross-check + open-data fallback; `domain-au`
-> was evaluated and dropped (cannot deliver recent comps — unsorted, ~35% prices
-> withheld). Accepted personal-use risk + full design in
-> `docs/superpowers/specs/2026-05-30-rapidapi-comps-integration-design.md`.
-```
-
-- [ ] **Step 3: Verify nothing broke**
-
-Run: `pnpm lint`
-Expected: PASS (Biome ignores `.env.example` and `.md`).
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit (only `.env.example` — do NOT stage `CLAUDE.md`)**
 
 ```bash
-git add .env.example CLAUDE.md
-git commit -m "docs: env example + CLAUDE.md pointer for the REA comp source"
+git add .env.example
+git commit -m "docs: add .env.example for the REA comp source"
 ```
 
 ---
@@ -1144,7 +1138,7 @@ git commit -m "docs: env example + CLAUDE.md pointer for the REA comp source"
 - `ProviderSchema` carries `rea`/`rea+nsw-vg`; `domainCalls` renamed; `RapidApiQuotaError` added.
 - Legacy Domain OAuth client committed (recoverable) then removed; `grep -rn "tools/domain" src tests` empty.
 - `pnpm typecheck && pnpm lint && pnpm test` green.
-- `.env.example` + CLAUDE.md pointer landed.
+- `.env.example` landed (CLAUDE.md pointer deferred — see Task 8).
 
 ## Deferred to a future plan (NOT in scope here)
 
