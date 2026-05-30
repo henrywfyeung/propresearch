@@ -1,5 +1,5 @@
 // src/agents/graph.ts — the report graph. This increment:
-// START → resolveAddress → fetchCandidateComps → reasonAndSelect → triangulate → END,
+// START → resolveAddress → fetchCandidateComps → reasonAndSelect → triangulate → compose → END,
 // compiled in-memory (no checkpointer; PostgresSaver lands with Inngest). Grows
 // as nodes are added.
 
@@ -8,6 +8,7 @@ import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
+import { compose } from '@/agents/nodes/10_compose';
 import { runWithReportContext } from '@/agents/reportContext';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
@@ -16,11 +17,13 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('fetchCandidateComps', fetchCandidateComps)
   .addNode('reasonAndSelect', reasonAndSelect)
   .addNode('triangulate', triangulate)
+  .addNode('compose', compose)
   .addEdge(START, 'resolveAddress')
   .addEdge('resolveAddress', 'fetchCandidateComps')
   .addEdge('fetchCandidateComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  .addEdge('triangulate', END)
+  .addEdge('triangulate', 'compose')
+  .addEdge('compose', END)
   .compile();
 
 /**

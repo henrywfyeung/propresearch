@@ -30,35 +30,44 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-05-30T00:00:00Z'));
   mockLlm.mockReset();
-  mockLlm.mockResolvedValue({
-    decisions: [
-      {
-        compId: 'NEAR',
-        selection: 'fair-value',
-        rejectionReason: null,
-        adjustments: [
+  mockLlm.mockImplementation(async (opts: { node: string }) => {
+    if (opts.node === 'reasonAndSelect') {
+      return {
+        decisions: [
           {
-            dimension: 'land-area',
-            delta: 0.05,
-            rationale: 'subject parcel is slightly larger than this comp',
+            compId: 'NEAR',
+            selection: 'fair-value',
+            rejectionReason: null,
+            adjustments: [
+              {
+                dimension: 'land-area',
+                delta: 0.05,
+                rationale: 'subject parcel is slightly larger than this comp',
+              },
+            ],
+            adjustmentNarrative:
+              'Adjusted modestly; otherwise a close like-for-like comparison overall here.',
+            adjustedValue: 2_600_000,
+            selectionRationale: 'Close match on beds, baths and proximity to the subject.',
+          },
+          {
+            compId: 'FAR',
+            selection: 'rejected',
+            rejectionReason: 'too far and bedroom count differs',
+            adjustments: [],
+            adjustmentNarrative:
+              'Rejected: distance and bedroom mismatch make this an unreliable comparison here.',
+            adjustedValue: 4_000_000,
+            selectionRationale:
+              'Excluded from the fair-value set due to distance and size mismatch.',
           },
         ],
-        adjustmentNarrative:
-          'Adjusted modestly; otherwise a close like-for-like comparison overall here.',
-        adjustedValue: 2_600_000,
-        selectionRationale: 'Close match on beds, baths and proximity to the subject.',
-      },
-      {
-        compId: 'FAR',
-        selection: 'rejected',
-        rejectionReason: 'too far and bedroom count differs',
-        adjustments: [],
-        adjustmentNarrative:
-          'Rejected: distance and bedroom mismatch make this an unreliable comparison here.',
-        adjustedValue: 4_000_000,
-        selectionRationale: 'Excluded from the fair-value set due to distance and size mismatch.',
-      },
-    ],
+      } as never;
+    }
+    if (opts.node.startsWith('compose:')) {
+      return [{ type: 'text', text: 'Section narrative prose for the dossier.' }] as never;
+    }
+    throw new Error(`unexpected LLM node: ${opts.node}`);
   });
 });
 
@@ -76,6 +85,7 @@ describe('reportGraph', () => {
     expect(state.comparables.map((c) => c.id)).toEqual(['NEAR', 'FAR']);
     expect(state.comparables.find((c) => c.id === 'NEAR')?.selection).toBe('fair-value');
     expect(state.triangulation?.reconciled).toBeGreaterThan(0);
+    expect(state.prose.valuation?.[0]?.type).toBe('range');
     expect(state.errors).toEqual([]);
   });
 
