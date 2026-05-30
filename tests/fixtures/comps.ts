@@ -107,3 +107,27 @@ export function graphState(over: Partial<GraphState> = {}): GraphState {
     ...over,
   };
 }
+
+export function mockMapbox(server: ReturnType<typeof setupServer>) {
+  server.use(
+    http.get('https://api.mapbox.com/search/geocode/v6/forward', () =>
+      HttpResponse.json({
+        features: [
+          {
+            properties: {
+              full_address: '1 Awaba St, Mosman NSW 2088, Australia',
+              name: '1 Awaba St',
+              coordinates: { longitude: 151.2454, latitude: -33.82 },
+              context: {
+                region: { name: 'New South Wales', region_code: 'NSW' },
+                postcode: { name: '2088' },
+                locality: { name: 'Mosman' },
+              },
+            },
+            geometry: { type: 'Point', coordinates: [151.2454, -33.82] },
+          },
+        ],
+      }),
+    ),
+  );
+}

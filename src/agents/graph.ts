@@ -3,13 +3,16 @@
 // as nodes are added.
 
 import { GraphAnnotation, type GraphState } from '@/agents/annotation';
+import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
 import { runWithReportContext } from '@/agents/reportContext';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
 export const reportGraph = new StateGraph(GraphAnnotation)
+  .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
-  .addEdge(START, 'fetchCandidateComps')
+  .addEdge(START, 'resolveAddress')
+  .addEdge('resolveAddress', 'fetchCandidateComps')
   .addEdge('fetchCandidateComps', END)
   .compile();
 
