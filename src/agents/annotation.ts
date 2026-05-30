@@ -3,6 +3,7 @@
 // errors append, singletons last-value.
 
 import { appendReducer, mergeByKey } from '@/agents/state';
+import type { ReportProse } from '@/schemas/claims';
 import type {
   Comparable,
   ResolvedAddress,
@@ -29,6 +30,10 @@ export const GraphAnnotation = Annotation.Root({
   triangulation: Annotation<TriangulatedValue | null>({
     reducer: (_c, u) => u,
     default: () => null,
+  }),
+  prose: Annotation<ReportProse>({
+    reducer: (cur, inc) => ({ ...cur, ...inc }),
+    default: () => ({}),
   }),
   errors: Annotation<{ code: string; message: string }[]>({
     reducer: appendReducer,

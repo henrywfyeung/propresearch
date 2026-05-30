@@ -104,6 +104,7 @@ export function graphState(over: Partial<GraphState> = {}): GraphState {
     subject: sampleSubject,
     comparables: [],
     triangulation: null,
+    prose: {},
     errors: [],
     ...over,
   };
