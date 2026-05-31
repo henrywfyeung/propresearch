@@ -39,6 +39,7 @@ export const GraphAnnotation = Annotation.Root({
     reducer: appendReducer,
     default: () => [],
   }),
+  pdfUrl: Annotation<string | null>({ reducer: (_c, u) => u, default: () => null }),
 });
 
 export type GraphState = typeof GraphAnnotation.State;
