@@ -15,6 +15,9 @@ const { insertReturning, insertValues, insert, updateWhere, updateSet, update } 
   return { insertReturning, insertValues, insert, updateWhere, updateSet, update };
 });
 vi.mock('@/db/client-worker', () => ({ workerDb: { insert, update } }));
+// @/db/client is imported by getReportStatus; mock it so the module-level
+// DATABASE_URL guard doesn't throw in the test environment.
+vi.mock('@/db/client', () => ({ db: { select: vi.fn(), update: vi.fn() } }));
 
 beforeEach(() => {
   insertReturning.mockReset().mockResolvedValue([{ id: 'rid-1' }]);
