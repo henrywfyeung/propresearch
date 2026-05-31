@@ -169,6 +169,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         h('div', {
           key: 'chart',
           className: 'chart',
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted SSR'd SVG from priceChartSvg() — built only from numbers + hard-coded literals, no user HTML; React has no other way to inline raw SVG.
           dangerouslySetInnerHTML: {
             __html: priceChartSvg({
               low: triangulation.low,
