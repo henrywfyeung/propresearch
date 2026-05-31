@@ -16,6 +16,12 @@ import {
 vi.mock('@/tools/llm/structuredCall', () => ({ callWithFallback: vi.fn() }));
 const mockLlm = vi.mocked(callWithFallback);
 
+// fetchRisks runs in parallel with fetchCandidateComps; mock it so the graph
+// test doesn't need to spin up MSW handlers for the NSW ArcGIS endpoints.
+vi.mock('@/agents/nodes/09_fetchRisks', () => ({
+  fetchRisks: vi.fn().mockResolvedValue({ risks: [] }),
+}));
+
 import { uploadPdf } from '@/tools/storage/s3';
 vi.mock('@/report/pdf', () => ({
   renderReportPdf: vi.fn().mockResolvedValue(new Uint8Array([1])),

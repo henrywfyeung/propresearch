@@ -103,6 +103,7 @@ export function graphState(over: Partial<GraphState> = {}): GraphState {
     resolvedAddress: sampleResolvedAddress,
     subject: sampleSubject,
     comparables: [],
+    risks: [],
     triangulation: null,
     prose: {},
     errors: [],

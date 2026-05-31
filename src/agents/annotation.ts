@@ -7,6 +7,7 @@ import type { ReportProse } from '@/schemas/claims';
 import type {
   Comparable,
   ResolvedAddress,
+  RiskFlag,
   SubjectProperty,
   TriangulatedValue,
 } from '@/schemas/state';
@@ -25,6 +26,10 @@ export const GraphAnnotation = Annotation.Root({
   }),
   comparables: Annotation<Comparable[]>({
     reducer: mergeByKey<Comparable>('id'),
+    default: () => [],
+  }),
+  risks: Annotation<RiskFlag[]>({
+    reducer: mergeByKey<RiskFlag>('category'),
     default: () => [],
   }),
   triangulation: Annotation<TriangulatedValue | null>({

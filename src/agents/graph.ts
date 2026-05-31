@@ -8,23 +8,33 @@ import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
+import { fetchRisks } from '@/agents/nodes/09_fetchRisks';
 import { compose } from '@/agents/nodes/10_compose';
 import { render } from '@/agents/nodes/13_render';
 import { runWithReportContext } from '@/agents/reportContext';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
+// Graph topology (spec §5 / CLAUDE.md §6.2):
+//
+//   START → resolveAddress ─┬→ fetchCandidateComps → reasonAndSelect → triangulate ─┐
+//                           └→ fetchRisks ──────────────────────────────────────────┴→ compose → render → END
+
 export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
+  .addNode('fetchRisks', fetchRisks)
   .addNode('reasonAndSelect', reasonAndSelect)
   .addNode('triangulate', triangulate)
   .addNode('compose', compose)
   .addNode('render', render)
   .addEdge(START, 'resolveAddress')
+  // parallel branches from resolveAddress
   .addEdge('resolveAddress', 'fetchCandidateComps')
+  .addEdge('resolveAddress', 'fetchRisks')
   .addEdge('fetchCandidateComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  .addEdge('triangulate', 'compose')
+  // compose waits for BOTH triangulate and fetchRisks (join)
+  .addEdge(['triangulate', 'fetchRisks'], 'compose')
   .addEdge('compose', 'render')
   .addEdge('render', END)
   .compile();
