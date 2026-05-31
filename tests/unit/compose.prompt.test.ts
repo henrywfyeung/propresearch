@@ -34,11 +34,12 @@ const input = {
     },
   ],
   risks: [],
+  recentDAs: [],
 };
 
 describe('compose prompt', () => {
-  it('is at version v1.2', () => {
-    expect(version).toBe('v1.2');
+  it('is at version v1.3', () => {
+    expect(version).toBe('v1.3');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);
@@ -56,5 +57,15 @@ describe('compose prompt', () => {
   it('risks section user message includes the serialised risk register', () => {
     const msgs = buildMessages('risks', { ...input, risks: [] });
     expect(msgs[1]?.content).toContain('Risk register');
+  });
+  it('planning section system message mentions development activity', () => {
+    const msgs = buildMessages('planning', input);
+    expect(msgs[0]?.role).toBe('system');
+    expect(msgs[0]?.content).toContain('development activity');
+    expect(msgs[0]?.content).toContain('do not invent activity');
+  });
+  it('planning section user message includes the serialised DA list', () => {
+    const msgs = buildMessages('planning', { ...input, recentDAs: [] });
+    expect(msgs[1]?.content).toContain('Recent DAs');
   });
 });

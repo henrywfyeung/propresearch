@@ -2,12 +2,18 @@
 // `version` on wording changes ([R30]). Output is text-only narrative blocks;
 // the node stamps the structured valuation claim.
 
-import type { RiskFlag } from '@/schemas/state';
+import type { RecentDA, RiskFlag } from '@/schemas/state';
 import type { LlmMessage } from '@/tools/llm/types';
 
-export const version = 'v1.2';
+export const version = 'v1.3';
 
-export type ComposeSection = 'summary' | 'subject' | 'valuation' | 'comparables' | 'risks';
+export type ComposeSection =
+  | 'summary'
+  | 'subject'
+  | 'valuation'
+  | 'comparables'
+  | 'risks'
+  | 'planning';
 
 export interface ComposeInput {
   suburb: string;
@@ -39,6 +45,7 @@ export interface ComposeInput {
     selection: string;
   }>;
   risks: RiskFlag[];
+  recentDAs: RecentDA[];
 }
 
 const VOICE =
@@ -53,11 +60,13 @@ const SECTION_BRIEF: Record<ComposeSection, string> = {
   comparables: 'Walk through the selected comparable sales and why they were chosen.',
   risks:
     "Summarise the risk register: which constraints apply (flood / bushfire / heritage), their severity, and what each means for a buyer. State plainly when a category found nothing ('None identified.') or when data was unavailable — do not imply a property is risk-free when data is missing.",
+  planning:
+    'Summarise recent development activity near the property from the DA list — the volume, any notable or large applications (by cost/scale), and what it signals for the area and a buyer. State plainly if no DAs were found nearby or data was unavailable; do not invent activity.',
 };
 
 export function buildMessages(section: ComposeSection, input: ComposeInput): LlmMessage[] {
   const system = `You are writing the "${section}" section of a residential property research dossier. ${SECTION_BRIEF[section]} ${VOICE}`;
-  const user = `Suburb: ${input.suburb}\nSubject attributes: ${JSON.stringify(input.subjectAttrs)}\nValuation: ${JSON.stringify(input.triangulation)}\nSelected comparables: ${JSON.stringify(input.selectedComps)}\nRisk register: ${JSON.stringify(input.risks)}`;
+  const user = `Suburb: ${input.suburb}\nSubject attributes: ${JSON.stringify(input.subjectAttrs)}\nValuation: ${JSON.stringify(input.triangulation)}\nSelected comparables: ${JSON.stringify(input.selectedComps)}\nRisk register: ${JSON.stringify(input.risks)}\nRecent DAs: ${JSON.stringify(input.recentDAs)}`;
   return [
     { role: 'system', content: system },
     { role: 'user', content: user },

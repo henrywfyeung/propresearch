@@ -9,7 +9,14 @@ import type { Comparable } from '@/schemas/state';
 import { callWithFallback } from '@/tools/llm/structuredCall';
 import { z } from 'zod';
 
-const SECTIONS: ComposeSection[] = ['summary', 'subject', 'valuation', 'comparables', 'risks'];
+const SECTIONS: ComposeSection[] = [
+  'summary',
+  'subject',
+  'valuation',
+  'comparables',
+  'risks',
+  'planning',
+];
 // Wrapped in an object: OpenAI structured output requires the root schema to be
 // an object, not a top-level array (the 'extract' function rejects array roots).
 const TextBlocksSchema = z.object({
@@ -44,6 +51,7 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
       .filter((c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor')
       .map(toCompSummary),
     risks: state.risks ?? [],
+    recentDAs: state.market?.recentDAs ?? [],
   };
 
   const entries = await Promise.all(

@@ -1,6 +1,6 @@
 import { compose } from '@/agents/nodes/10_compose';
 import { buildMessages } from '@/prompts/compose';
-import type { RiskFlag } from '@/schemas/state';
+import type { RecentDA, RiskFlag } from '@/schemas/state';
 import { callWithFallback } from '@/tools/llm/structuredCall';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // tests/unit/compose.test.ts
@@ -27,6 +27,21 @@ beforeEach(() => {
   mockLlm.mockResolvedValue({ blocks: [{ type: 'text', text: 'Section narrative prose.' }] });
 });
 
+const sampleDA: RecentDA = {
+  description: 'Demolition and construction of a 4-storey residential flat building',
+  status: 'Under Assessment',
+  category: 'Residential',
+  distanceM: 120,
+  lodgedDate: '2026-03-15',
+  coverage: 'full',
+  sourceRef: {
+    provider: 'nsw-planning',
+    endpoint: 'online-da',
+    fetchedAt: '2026-05-30T00:00:00.000Z',
+    path: '/market/recentDAs/0/status',
+  },
+};
+
 const sampleRisk: RiskFlag = {
   category: 'flood',
   severity: 'high',
@@ -42,15 +57,17 @@ const sampleRisk: RiskFlag = {
 };
 
 describe('compose', () => {
-  it('writes all five sections (including risks) and stamps the valuation range first', async () => {
+  it('writes all six sections (including risks and planning) and stamps the valuation range first', async () => {
     const state = graphState({
       comparables: [sampleComparable('a', { selection: 'fair-value', adjustedValue: 2_500_000 })],
       triangulation: tri,
       risks: [sampleRisk],
+      market: { suburbStats: null, recentNews: [], recentDAs: [sampleDA] },
     });
     const out = await compose(state);
     expect(Object.keys(out.prose ?? {}).sort()).toEqual([
       'comparables',
+      'planning',
       'risks',
       'subject',
       'summary',
@@ -66,7 +83,7 @@ describe('compose', () => {
       expect(first.high).toBe(2_600_000);
       expect(first.sourceRef.path).toBe('/triangulation/reconciled');
     }
-    expect(mockLlm).toHaveBeenCalledTimes(5);
+    expect(mockLlm).toHaveBeenCalledTimes(6);
   });
 
   it('risks section messages include the risk category and severity', () => {
@@ -83,11 +100,34 @@ describe('compose', () => {
       triangulation: null,
       selectedComps: [],
       risks: [sampleRisk],
+      recentDAs: [],
     };
     const msgs = buildMessages('risks', input);
     const userContent = msgs[1]?.content ?? '';
     expect(userContent).toContain('flood');
     expect(userContent).toContain('high');
+  });
+
+  it('planning section messages include DA description and status', () => {
+    const input = {
+      suburb: 'Mosman',
+      subjectAttrs: {
+        beds: 3,
+        baths: 2,
+        parking: 1,
+        landArea: 500,
+        buildingArea: null,
+        propertyType: 'House',
+      },
+      triangulation: null,
+      selectedComps: [],
+      risks: [],
+      recentDAs: [sampleDA],
+    };
+    const msgs = buildMessages('planning', input);
+    const userContent = msgs[1]?.content ?? '';
+    expect(userContent).toContain('4-storey residential flat building');
+    expect(userContent).toContain('Under Assessment');
   });
 
   it('errors in-band when there is no subject', async () => {
