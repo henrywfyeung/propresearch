@@ -8,6 +8,7 @@
 // (dev sample script), Vitest, and the Next/Vercel build — the repo's
 // tsconfig uses `jsx: preserve`, which tsx/esbuild won't transform.
 
+import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable } from '@/schemas/state';
@@ -66,6 +67,7 @@ export const reportStyles = `
   .value-callout .conf.low { color: #C9302C; border-color: #C9302C; }
   .uncertainty { font-size: 9pt; color: #8A5A00; background: #FFF7E6; border: 1px solid #FFE3A3;
     border-radius: 4px; padding: 8px 10px; margin: 0 0 10px; }
+  .chart { margin: 6px 0 12px; }
   .attrs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 4px 0 10px; }
   .attrs .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .attrs .v { font-size: 11pt; font-weight: 600; }
@@ -160,6 +162,27 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     if (triangulation.uncertaintyNote) {
       valuationChildren.push(
         h('p', { key: 'unc', className: 'uncertainty' }, triangulation.uncertaintyNote),
+      );
+    }
+    if (selected.length > 0) {
+      valuationChildren.push(
+        h('div', {
+          key: 'chart',
+          className: 'chart',
+          dangerouslySetInnerHTML: {
+            __html: priceChartSvg({
+              low: triangulation.low,
+              high: triangulation.high,
+              reconciled: triangulation.reconciled,
+              comps: selected.map((c) => ({
+                label: c.address,
+                price: c.salePrice,
+                selection:
+                  c.selection === 'negotiation-anchor' ? 'negotiation-anchor' : 'fair-value',
+              })),
+            }),
+          },
+        }),
       );
     }
   }
