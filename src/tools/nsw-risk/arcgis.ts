@@ -136,6 +136,18 @@ export interface ArcgisPointQueryOpts {
   service: string;
   /** Exact layer name as it appears in MapServer?f=json → layers[].name. */
   layerName: string;
+  /**
+   * Optional numeric layer ID override.
+   *
+   * Use this only when two layers in the same MapServer share an identical
+   * name (e.g. HMS/Heritage has both a points layer and a polygon layer both
+   * named "State Heritage Register"). When provided, name resolution is
+   * skipped and this ID is used directly.
+   *
+   * TODO: Remove when ArcGIS disambiguates duplicate layer names or when the
+   * layer is renamed on the server.
+   */
+  layerId?: number;
   /** WGS84 longitude. */
   lng: number;
   /** WGS84 latitude. */
@@ -167,7 +179,8 @@ export async function arcgisPointQuery<T>(
   const { service, layerName, lng, lat, outFields } = opts;
   const base = arcgisBase();
 
-  const layerId = await resolveLayerId(service, layerName);
+  const layerId =
+    opts.layerId !== undefined ? opts.layerId : await resolveLayerId(service, layerName);
 
   const url = new URL(`${base}/${service}/MapServer/${layerId}/query`);
   url.searchParams.set('geometry', `${lng},${lat}`);
