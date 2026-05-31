@@ -46,3 +46,10 @@ export async function markFailed(id: string, errorMessage: string): Promise<void
     .set({ status: 'failed', errorMessage, completedAt: new Date(), updatedAt: new Date() })
     .where(eq(reports.id, id));
 }
+
+export async function markNode(id: string, currentNode: string): Promise<void> {
+  await workerDb
+    .update(reports)
+    .set({ currentNode, updatedAt: new Date() })
+    .where(eq(reports.id, id));
+}

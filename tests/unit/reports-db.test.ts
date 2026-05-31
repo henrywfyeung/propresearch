@@ -1,5 +1,5 @@
 // tests/unit/reports-db.test.ts
-import { createReport, markFailed, markRunning, markSucceeded } from '@/db/reports';
+import { createReport, markFailed, markNode, markRunning, markSucceeded } from '@/db/reports';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted so these mock fns are initialised before the hoisted vi.mock
@@ -61,5 +61,11 @@ describe('reports persistence', () => {
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', errorMessage: 'boom' }),
     );
+  });
+
+  it('markNode sets currentNode + updatedAt', async () => {
+    await markNode('rid-1', 'compose');
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ currentNode: 'compose' }));
+    expect(updateWhere).toHaveBeenCalledOnce();
   });
 });

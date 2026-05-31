@@ -43,11 +43,55 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge('render', END)
   .compile();
 
+export interface RunGraphOpts {
+  /** Called after each node completes, with the node name. */
+  onNode?: (node: string) => void | Promise<void>;
+}
+
 /**
- * Invoke the graph with a per-report context so the RapidAPI per-report quota
+ * Run the graph with a per-report context so the RapidAPI per-report quota
  * (rapidApiCall → reportCtx) is enforced. `input` seeds the graph's initial state.
+ *
+ * When `opts.onNode` is provided the graph runs in streaming mode so each
+ * completed node triggers the callback; the return value is identical to the
+ * non-streaming `invoke` path.  When `onNode` is omitted the behaviour is
+ * identical to the previous `reportGraph.invoke(input)` call.
  */
-export async function runGraph(input: Partial<GraphState>): Promise<GraphState> {
+export async function runGraph(
+  input: Partial<GraphState>,
+  opts?: RunGraphOpts,
+): Promise<GraphState> {
   const reportId = input.reportId ?? 'adhoc';
-  return runWithReportContext({ reportId }, () => reportGraph.invoke(input));
+
+  if (!opts?.onNode) {
+    // Fast path — no streaming overhead when no callback is registered.
+    return runWithReportContext({ reportId }, () => reportGraph.invoke(input));
+  }
+
+  // Capture `onNode` in a local so TypeScript doesn't lose the non-undefined
+  // narrowing across the async closure boundary.
+  const onNode = opts.onNode;
+
+  return runWithReportContext({ reportId }, async () => {
+    const stream = await reportGraph.stream(input, {
+      streamMode: ['values', 'updates'],
+    });
+
+    let finalState: GraphState | undefined;
+
+    for await (const chunk of stream) {
+      // Multi-mode streaming yields [mode, payload] tuples.
+      const [mode, payload] = chunk as [string, unknown];
+
+      if (mode === 'updates' && payload !== null && typeof payload === 'object') {
+        const node = Object.keys(payload as object)[0];
+        if (node) await onNode(node);
+      } else if (mode === 'values') {
+        finalState = payload as GraphState;
+      }
+    }
+
+    if (!finalState) throw new Error('runGraph: stream produced no final state');
+    return finalState;
+  });
 }
