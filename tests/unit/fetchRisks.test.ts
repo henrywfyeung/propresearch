@@ -315,6 +315,32 @@ describe('fetchRisks — adapter failures (graceful degrade)', () => {
     // Still no graph-level error — graceful degrade
     expect(result.errors).toBeUndefined();
   });
+
+  it('resolveLga throws → degrades to null (conservative flood), node does not crash', async () => {
+    mockResolveLga.mockRejectedValue(new Error('LGA service 503'));
+    mockQueryBushfire.mockResolvedValue(null);
+    mockQueryHeritage.mockResolvedValue(null);
+    // With lga unresolved, queryFlood gets null and returns its conservative
+    // (dataAvailable:false) branch — never a false "no flood risk".
+    mockQueryFlood.mockResolvedValue({
+      category: 'flood',
+      severity: 'informational',
+      description:
+        'NSW has not published LEP flood-planning mapping for this LGA — assess flood risk separately.',
+      dataAvailable: false,
+      sourceRef: null,
+      evidence: null,
+    });
+
+    const state = graphState({ resolvedAddress: NSW_ADDRESS });
+    const result = await fetchRisks(state);
+
+    expect(result.errors).toBeUndefined(); // node did NOT crash on the LGA failure
+    expect(result.risks).toHaveLength(3);
+    // The resolveLga rejection was caught → queryFlood invoked with null lga.
+    expect(mockQueryFlood).toHaveBeenCalledWith(NSW_ADDRESS.lat, NSW_ADDRESS.lng, null);
+    expect(result.risks!.find((r) => r.category === 'flood')!.dataAvailable).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

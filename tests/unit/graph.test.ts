@@ -79,7 +79,10 @@ beforeEach(() => {
       } as never;
     }
     if (opts.node.startsWith('compose:')) {
-      return [{ type: 'text', text: 'Section narrative prose for the dossier.' }] as never;
+      // compose unwraps `out.blocks` — must mock the object shape, not a bare array.
+      return {
+        blocks: [{ type: 'text', text: 'Section narrative prose for the dossier.' }],
+      } as never;
     }
     throw new Error(`unexpected LLM node: ${opts.node}`);
   });

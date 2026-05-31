@@ -77,8 +77,13 @@ export async function fetchRisks(state: GraphState): Promise<Partial<GraphState>
     };
   }
 
-  // Resolve LGA for flood coverage disambiguation (§3 of spec)
-  const lga = await resolveLga(lat, lng);
+  // Resolve LGA for flood coverage disambiguation (§3 of spec). A failure here MUST
+  // degrade, not crash the node: null → queryFlood's conservative branch
+  // (dataAvailable:false), never a false "no flood risk".
+  const lga = await resolveLga(lat, lng).catch((err: unknown) => {
+    logger.warn({ err }, 'fetchRisks: LGA resolution failed; using conservative flood branch');
+    return null;
+  });
 
   // Run all three in parallel; collect results without throwing
   const [bushfireResult, heritageResult, floodResult] = await Promise.allSettled([
