@@ -8,7 +8,7 @@
 import { db } from '@/db/client';
 import { workerDb } from '@/db/client-worker';
 import { reports } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 export async function createReport(userId: string): Promise<string> {
   const [row] = await workerDb
@@ -56,6 +56,37 @@ export async function markNode(id: string, currentNode: string): Promise<void> {
     .update(reports)
     .set({ currentNode, updatedAt: new Date() })
     .where(eq(reports.id, id));
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard list — used by the dashboard page (GET /).
+//
+// Returns the user's own reports (newest first) selecting only top-level
+// denormalised columns so the §4.3 cross-row ESLint guard is satisfied.
+// ---------------------------------------------------------------------------
+
+export interface ReportListRow {
+  id: string;
+  subjectAddress: string | null;
+  status: string;
+  createdAt: Date;
+}
+
+/**
+ * Returns all reports belonging to userId, newest first.
+ * Selects top-level columns only (id, subjectAddress, status, createdAt).
+ */
+export async function listReportsForUser(userId: string): Promise<ReportListRow[]> {
+  return db
+    .select({
+      id: reports.id,
+      subjectAddress: reports.subjectAddress,
+      status: reports.status,
+      createdAt: reports.createdAt,
+    })
+    .from(reports)
+    .where(eq(reports.userId, userId))
+    .orderBy(desc(reports.createdAt));
 }
 
 // ---------------------------------------------------------------------------
