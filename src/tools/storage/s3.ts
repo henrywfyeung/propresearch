@@ -2,7 +2,7 @@
 // AWS S3 by default; set S3_ENDPOINT for an S3-compatible provider (R2/MinIO).
 // Returns the object key; the bucket stays private and the download route signs it.
 
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 function makeClient(): S3Client {
   const endpoint = process.env.S3_ENDPOINT || undefined;
@@ -15,6 +15,14 @@ function makeClient(): S3Client {
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
     },
   });
+}
+
+export async function getPdf(key: string): Promise<Uint8Array> {
+  const bucket = process.env.S3_BUCKET;
+  if (!bucket) throw new Error('S3_BUCKET is not set');
+  const response = await makeClient().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!response.Body) throw new Error(`S3 object not found: ${key}`);
+  return response.Body.transformToByteArray();
 }
 
 export async function uploadPdf(key: string, bytes: Uint8Array): Promise<string> {

@@ -1,12 +1,13 @@
-import { uploadPdf } from '@/tools/storage/s3';
 // tests/unit/storage-s3.test.ts
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { getPdf, uploadPdf } from '@/tools/storage/s3';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const send = vi.fn();
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: vi.fn(() => ({ send })),
   PutObjectCommand: vi.fn((args: unknown) => ({ args })),
+  GetObjectCommand: vi.fn((args: unknown) => ({ args })),
 }));
 
 beforeEach(() => {
@@ -35,5 +36,32 @@ describe('uploadPdf', () => {
   it('throws when S3_BUCKET is unset', async () => {
     process.env.S3_BUCKET = '';
     await expect(uploadPdf('k', new Uint8Array())).rejects.toThrow('S3_BUCKET');
+  });
+});
+
+describe('getPdf', () => {
+  it('returns the bytes from Body.transformToByteArray', async () => {
+    const expected = new Uint8Array([37, 80, 68, 70]); // %PDF
+    send.mockResolvedValueOnce({
+      Body: { transformToByteArray: async () => expected },
+    });
+
+    const result = await getPdf('reports/r1/v1.pdf');
+
+    expect(result).toEqual(expected);
+    expect(GetObjectCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ Bucket: 'test-bucket', Key: 'reports/r1/v1.pdf' }),
+    );
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('throws when S3_BUCKET is unset', async () => {
+    process.env.S3_BUCKET = '';
+    await expect(getPdf('k')).rejects.toThrow('S3_BUCKET');
+  });
+
+  it('throws when Body is missing (object not found)', async () => {
+    send.mockResolvedValueOnce({ Body: undefined });
+    await expect(getPdf('reports/missing/v1.pdf')).rejects.toThrow('S3 object not found');
   });
 });
