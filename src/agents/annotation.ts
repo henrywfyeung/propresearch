@@ -6,6 +6,7 @@ import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
 import type {
   Comparable,
+  MarketContext,
   ResolvedAddress,
   RiskFlag,
   SubjectProperty,
@@ -33,6 +34,10 @@ export const GraphAnnotation = Annotation.Root({
     default: () => [],
   }),
   triangulation: Annotation<TriangulatedValue | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
+  }),
+  market: Annotation<MarketContext | null>({
     reducer: (_c, u) => u,
     default: () => null,
   }),

@@ -106,6 +106,8 @@ export const RecentDASchema = z.object({
   sourceRef: SourceRefSchema,
 });
 
+export type RecentDA = z.infer<typeof RecentDASchema>;
+
 export const MarketContextSchema = z.object({
   suburbStats: z.record(z.string(), z.unknown()).nullable(),
   recentNews: z.array(z.object({ headline: z.string(), url: z.string().url() })),

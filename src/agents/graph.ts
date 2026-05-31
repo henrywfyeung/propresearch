@@ -6,6 +6,7 @@
 import { GraphAnnotation, type GraphState } from '@/agents/annotation';
 import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
+import { fetchPlanning } from '@/agents/nodes/05_planningAndNews';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
 import { fetchRisks } from '@/agents/nodes/09_fetchRisks';
@@ -17,11 +18,13 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 // Graph topology (spec §5 / CLAUDE.md §6.2):
 //
 //   START → resolveAddress ─┬→ fetchCandidateComps → reasonAndSelect → triangulate ─┐
-//                           └→ fetchRisks ──────────────────────────────────────────┴→ compose → render → END
+//                           ├→ fetchRisks ──────────────────────────────────────────┤
+//                           └→ fetchPlanning ────────────────────────────────────────┴→ compose → render → END
 
 export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
+  .addNode('fetchPlanning', fetchPlanning)
   .addNode('fetchRisks', fetchRisks)
   .addNode('reasonAndSelect', reasonAndSelect)
   .addNode('triangulate', triangulate)
@@ -31,10 +34,11 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   // parallel branches from resolveAddress
   .addEdge('resolveAddress', 'fetchCandidateComps')
   .addEdge('resolveAddress', 'fetchRisks')
+  .addEdge('resolveAddress', 'fetchPlanning')
   .addEdge('fetchCandidateComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  // compose waits for BOTH triangulate and fetchRisks (join)
-  .addEdge(['triangulate', 'fetchRisks'], 'compose')
+  // compose waits for triangulate, fetchRisks, AND fetchPlanning (3-way join)
+  .addEdge(['triangulate', 'fetchRisks', 'fetchPlanning'], 'compose')
   .addEdge('compose', 'render')
   .addEdge('render', END)
   .compile();

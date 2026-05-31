@@ -105,6 +105,7 @@ export function graphState(over: Partial<GraphState> = {}): GraphState {
     comparables: [],
     risks: [],
     triangulation: null,
+    market: null,
     prose: {},
     errors: [],
     pdfUrl: null,
