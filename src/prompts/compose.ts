@@ -2,11 +2,12 @@
 // `version` on wording changes ([R30]). Output is text-only narrative blocks;
 // the node stamps the structured valuation claim.
 
+import type { RiskFlag } from '@/schemas/state';
 import type { LlmMessage } from '@/tools/llm/types';
 
-export const version = 'v1.1';
+export const version = 'v1.2';
 
-export type ComposeSection = 'summary' | 'subject' | 'valuation' | 'comparables';
+export type ComposeSection = 'summary' | 'subject' | 'valuation' | 'comparables' | 'risks';
 
 export interface ComposeInput {
   suburb: string;
@@ -37,6 +38,7 @@ export interface ComposeInput {
     propertyType: string;
     selection: string;
   }>;
+  risks: RiskFlag[];
 }
 
 const VOICE =
@@ -49,11 +51,13 @@ const SECTION_BRIEF: Record<ComposeSection, string> = {
   valuation:
     'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer.',
   comparables: 'Walk through the selected comparable sales and why they were chosen.',
+  risks:
+    "Summarise the risk register: which constraints apply (flood / bushfire / heritage), their severity, and what each means for a buyer. State plainly when a category found nothing ('None identified.') or when data was unavailable — do not imply a property is risk-free when data is missing.",
 };
 
 export function buildMessages(section: ComposeSection, input: ComposeInput): LlmMessage[] {
   const system = `You are writing the "${section}" section of a residential property research dossier. ${SECTION_BRIEF[section]} ${VOICE}`;
-  const user = `Suburb: ${input.suburb}\nSubject attributes: ${JSON.stringify(input.subjectAttrs)}\nValuation: ${JSON.stringify(input.triangulation)}\nSelected comparables: ${JSON.stringify(input.selectedComps)}`;
+  const user = `Suburb: ${input.suburb}\nSubject attributes: ${JSON.stringify(input.subjectAttrs)}\nValuation: ${JSON.stringify(input.triangulation)}\nSelected comparables: ${JSON.stringify(input.selectedComps)}\nRisk register: ${JSON.stringify(input.risks)}`;
   return [
     { role: 'system', content: system },
     { role: 'user', content: user },

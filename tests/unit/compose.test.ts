@@ -1,4 +1,6 @@
 import { compose } from '@/agents/nodes/10_compose';
+import { buildMessages } from '@/prompts/compose';
+import type { RiskFlag } from '@/schemas/state';
 import { callWithFallback } from '@/tools/llm/structuredCall';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // tests/unit/compose.test.ts
@@ -25,15 +27,31 @@ beforeEach(() => {
   mockLlm.mockResolvedValue({ blocks: [{ type: 'text', text: 'Section narrative prose.' }] });
 });
 
+const sampleRisk: RiskFlag = {
+  category: 'flood',
+  severity: 'high',
+  description: 'Property is within the 1-in-100-year flood planning area.',
+  sourceRef: {
+    provider: 'nsw-planning',
+    endpoint: 'wfs:flood',
+    fetchedAt: '2026-05-30T00:00:00.000Z',
+    path: '/risks/0/severity',
+  },
+  evidence: 'Flood planning polygon intersects lot boundary.',
+  dataAvailable: true,
+};
+
 describe('compose', () => {
-  it('writes all four sections and stamps the valuation range first', async () => {
+  it('writes all five sections (including risks) and stamps the valuation range first', async () => {
     const state = graphState({
       comparables: [sampleComparable('a', { selection: 'fair-value', adjustedValue: 2_500_000 })],
       triangulation: tri,
+      risks: [sampleRisk],
     });
     const out = await compose(state);
     expect(Object.keys(out.prose ?? {}).sort()).toEqual([
       'comparables',
+      'risks',
       'subject',
       'summary',
       'valuation',
@@ -48,7 +66,28 @@ describe('compose', () => {
       expect(first.high).toBe(2_600_000);
       expect(first.sourceRef.path).toBe('/triangulation/reconciled');
     }
-    expect(mockLlm).toHaveBeenCalledTimes(4);
+    expect(mockLlm).toHaveBeenCalledTimes(5);
+  });
+
+  it('risks section messages include the risk category and severity', () => {
+    const input = {
+      suburb: 'Mosman',
+      subjectAttrs: {
+        beds: 3,
+        baths: 2,
+        parking: 1,
+        landArea: 500,
+        buildingArea: null,
+        propertyType: 'House',
+      },
+      triangulation: null,
+      selectedComps: [],
+      risks: [sampleRisk],
+    };
+    const msgs = buildMessages('risks', input);
+    const userContent = msgs[1]?.content ?? '';
+    expect(userContent).toContain('flood');
+    expect(userContent).toContain('high');
   });
 
   it('errors in-band when there is no subject', async () => {

@@ -33,11 +33,12 @@ const input = {
       selection: 'fair-value',
     },
   ],
+  risks: [],
 };
 
 describe('compose prompt', () => {
-  it('has a non-empty version', () => {
-    expect(version.length).toBeGreaterThan(0);
+  it('is at version v1.2', () => {
+    expect(version).toBe('v1.2');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);
@@ -45,5 +46,15 @@ describe('compose prompt', () => {
     expect(msgs[0]?.content).toContain('valuation');
     expect(msgs[1]?.role).toBe('user');
     expect(msgs[1]?.content).toContain('Mosman');
+  });
+  it('risks section system message mentions risk register instructions', () => {
+    const msgs = buildMessages('risks', input);
+    expect(msgs[0]?.role).toBe('system');
+    expect(msgs[0]?.content).toContain('risk register');
+    expect(msgs[0]?.content).toContain('data was unavailable');
+  });
+  it('risks section user message includes the serialised risk register', () => {
+    const msgs = buildMessages('risks', { ...input, risks: [] });
+    expect(msgs[1]?.content).toContain('Risk register');
   });
 });
