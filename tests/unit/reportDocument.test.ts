@@ -1,6 +1,6 @@
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
-import type { RiskFlag } from '@/schemas/state';
+import type { RecentDA, RiskFlag } from '@/schemas/state';
 import { describe, expect, it } from 'vitest';
 
 const data: ReportData = {
@@ -25,6 +25,7 @@ const data: ReportData = {
   },
   comparables: [],
   risks: [],
+  recentDAs: [],
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -129,5 +130,104 @@ describe('Risk register rendering', () => {
   it('renders an empty risk register section when risks array is empty', () => {
     const html = renderReportHtml({ ...data, risks: [] });
     expect(html).toContain('Risk register');
+  });
+});
+
+describe('Planning activity rendering', () => {
+  const daFull: RecentDA = {
+    description: 'Demolish existing dwelling and construct two-storey dwelling',
+    status: 'Approved',
+    category: 'Development Application',
+    distanceM: 120,
+    lodgedDate: '2026-03-15',
+    coverage: 'full',
+    sourceRef: {
+      provider: 'nsw-planning',
+      endpoint: 'onlineDa',
+      fetchedAt: '2026-05-31T00:00:00.000Z',
+      path: '/market/recentDAs/0',
+    },
+  };
+
+  const daMeta: RecentDA = {
+    description: 'Subdivision of land into three lots',
+    status: null,
+    category: null,
+    distanceM: 340,
+    lodgedDate: null,
+    coverage: 'metadata-only',
+    sourceRef: {
+      provider: 'nsw-planning',
+      endpoint: 'onlineDa',
+      fetchedAt: '2026-05-31T00:00:00.000Z',
+      path: '/market/recentDAs/1',
+    },
+  };
+
+  it('renders Planning activity heading', () => {
+    const html = renderReportHtml({ ...data, recentDAs: [daFull] });
+    expect(html).toContain('Planning activity');
+  });
+
+  it('renders DA description, distance, and status chip', () => {
+    const html = renderReportHtml({ ...data, recentDAs: [daFull] });
+    expect(html).toContain('Demolish existing dwelling and construct two-storey dwelling');
+    expect(html).toContain('120 m');
+    expect(html).toContain('Approved');
+  });
+
+  it('renders DA with metadata-only coverage and no status', () => {
+    const html = renderReportHtml({ ...data, recentDAs: [daMeta] });
+    expect(html).toContain('Subdivision of land into three lots');
+    expect(html).toContain('340 m');
+  });
+
+  it('renders prose.planning paragraphs above the DA list', () => {
+    const planningProse: ReportData['prose'] = {
+      ...data.prose,
+      planning: [
+        {
+          type: 'text',
+          text: 'Three development applications were lodged nearby in the past 12 months.',
+        },
+      ],
+    };
+    const html = renderReportHtml({ ...data, recentDAs: [daFull], prose: planningProse });
+    expect(html).toContain('Three development applications were lodged nearby');
+    // prose should appear before the DA row
+    const proseIdx = html.indexOf('Three development applications were lodged nearby');
+    const rowIdx = html.indexOf('Demolish existing dwelling');
+    expect(proseIdx).toBeLessThan(rowIdx);
+  });
+
+  it('renders empty-state message when recentDAs is empty', () => {
+    const html = renderReportHtml({ ...data, recentDAs: [] });
+    expect(html).toContain('Planning activity');
+    expect(html).toContain('No recent development applications found nearby');
+    expect(html).toContain('unavailable');
+  });
+
+  it('caps display at 10 DAs and shows overflow count', () => {
+    const manyDAs: RecentDA[] = Array.from({ length: 13 }, (_, i) => ({
+      description: `DA number ${i + 1}`,
+      status: 'Pending',
+      category: null,
+      distanceM: 50 + i * 20,
+      lodgedDate: '2026-01-01',
+      coverage: 'full' as const,
+      sourceRef: {
+        provider: 'nsw-planning' as const,
+        endpoint: 'onlineDa',
+        fetchedAt: '2026-05-31T00:00:00.000Z',
+        path: `/market/recentDAs/${i}`,
+      },
+    }));
+    const html = renderReportHtml({ ...data, recentDAs: manyDAs });
+    // Only first 10 shown
+    expect(html).toContain('DA number 1');
+    expect(html).toContain('DA number 10');
+    expect(html).not.toContain('DA number 11');
+    // Overflow line
+    expect(html).toContain('3 more');
   });
 });

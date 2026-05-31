@@ -11,7 +11,7 @@
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
-import type { Comparable, RiskFlag } from '@/schemas/state';
+import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
 import { type ReactElement, createElement as h } from 'react';
 
 export interface ReportData {
@@ -36,6 +36,7 @@ export interface ReportData {
   } | null;
   comparables: Comparable[];
   risks: RiskFlag[];
+  recentDAs: RecentDA[];
   prose: ReportProse;
   generatedAt: string; // ISO
 }
@@ -93,6 +94,14 @@ export const reportStyles = `
   .risk-row .risk-desc { font-size: 9pt; flex: 1; }
   .risk-row.unavailable .risk-cat,
   .risk-row.unavailable .risk-desc { color: var(--muted); }
+  .da-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid var(--line); break-inside: avoid; }
+  .da-row:last-child { border-bottom: none; }
+  .da-row .da-dist { font-size: 8.5pt; color: var(--muted); min-width: 46px; font-variant-numeric: tabular-nums; }
+  .da-row .da-date { font-size: 8.5pt; color: var(--muted); min-width: 72px; }
+  .da-row .da-desc { font-size: 9pt; flex: 1; }
+  .da-row.da-unavailable .da-desc { color: var(--muted); font-style: italic; }
+  .da-overflow { font-size: 8.5pt; color: var(--muted); padding: 5px 0 0; }
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
 `;
@@ -129,8 +138,27 @@ function riskRow(flag: RiskFlag): ReactElement {
   );
 }
 
+const DA_DISPLAY_MAX = 10;
+
+function daRow(da: RecentDA, index: number): ReactElement {
+  const distLabel = `${Math.round(da.distanceM)} m`;
+  const dateLabel = da.lodgedDate ?? '—';
+  // Truncate very long descriptions (> 120 chars)
+  const descText =
+    da.description.length > 120 ? `${da.description.slice(0, 117)}…` : da.description;
+  const chipClass = 'badge sev-low';
+  return h(
+    'div',
+    { key: `da-${index}`, className: 'da-row' },
+    h('span', { className: 'da-dist' }, distLabel),
+    h('span', { className: 'da-date' }, dateLabel),
+    h('span', { className: 'da-desc' }, descText),
+    da.status != null ? h('span', { className: chipClass }, da.status) : null,
+  );
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
-  const { subject, triangulation, prose, comparables, risks } = data;
+  const { subject, triangulation, prose, comparables, risks, recentDAs } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
   );
@@ -263,6 +291,36 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     ...risks.map(riskRow),
   );
 
+  const displayDAs = recentDAs.slice(0, DA_DISPLAY_MAX);
+  const overflowCount = recentDAs.length - displayDAs.length;
+  const planningChildren: ReactElement[] = [h('h2', { key: 'ph' }, 'Planning activity')];
+  planningChildren.push(...paragraphs(prose.planning));
+  if (recentDAs.length === 0) {
+    planningChildren.push(
+      h(
+        'div',
+        { key: 'da-empty', className: 'da-row da-unavailable' },
+        h(
+          'span',
+          { className: 'da-desc' },
+          'No recent development applications found nearby, or planning data was unavailable for this council.',
+        ),
+      ),
+    );
+  } else {
+    planningChildren.push(...displayDAs.map((da, i) => daRow(da, i)));
+    if (overflowCount > 0) {
+      planningChildren.push(
+        h(
+          'div',
+          { key: 'da-overflow', className: 'da-overflow' },
+          `+${overflowCount} more applications nearby`,
+        ),
+      );
+    }
+  }
+  const planningSection = h('section', { key: 'planning' }, ...planningChildren);
+
   const footer = h(
     'footer',
     null,
@@ -279,6 +337,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     valuation,
     comparablesSection,
     riskSection,
+    planningSection,
     footer,
   );
 }
