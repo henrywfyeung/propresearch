@@ -85,7 +85,10 @@ export async function runGraph(
 
       if (mode === 'updates' && payload !== null && typeof payload === 'object') {
         const node = Object.keys(payload as object)[0];
-        if (node) await onNode(node);
+        // `__metadata__` appears alongside the node key only on checkpointed-task
+        // replays (no checkpointer today, but guard it so a future PostgresSaver
+        // doesn't write currentNode='__metadata__'). [review]
+        if (node && node !== '__metadata__') await onNode(node);
       } else if (mode === 'values') {
         finalState = payload as GraphState;
       }

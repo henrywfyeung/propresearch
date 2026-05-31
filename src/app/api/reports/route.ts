@@ -9,9 +9,10 @@
 
 export const runtime = 'nodejs';
 
-import { createReport } from '@/db/reports';
+import { createReport, markFailed } from '@/db/reports';
 import { inngest } from '@/inngest/client';
 import { requireAllowedUser } from '@/lib/auth/user';
+import { logger } from '@/lib/observability/logger';
 import { z } from 'zod';
 
 const BodySchema = z.object({
@@ -39,10 +40,19 @@ export async function POST(req: Request): Promise<Response> {
 
   const reportId = await createReport(userId);
 
-  await inngest.send({
-    name: 'reports/generate.requested',
-    data: { reportId, userId, rawAddress, rawSubject: subject },
-  });
+  try {
+    await inngest.send({
+      name: 'reports/generate.requested',
+      data: { reportId, userId, rawAddress, rawSubject: subject },
+    });
+  } catch (err) {
+    // Don't leave a perpetually-'queued' orphan row if the enqueue fails (e.g. a
+    // missing/invalid INNGEST_EVENT_KEY, or an Inngest outage): mark it failed and
+    // surface a 502 so the UI shows a clear error instead of a stuck report.
+    logger.error({ err, reportId }, 'inngest.send failed; marking report failed');
+    await markFailed(reportId, 'Failed to enqueue report generation. Please try again.');
+    return Response.json({ error: 'Failed to enqueue report generation' }, { status: 502 });
+  }
 
   return Response.json({ id: reportId }, { status: 201 });
 }

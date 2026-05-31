@@ -47,11 +47,12 @@ vi.mock('@/db/client-worker', () => ({ workerDb: {} }));
 
 import { GET } from '@/app/api/reports/[id]/route';
 import { POST } from '@/app/api/reports/route';
-import { createReport, getReportStatus } from '@/db/reports';
+import { createReport, getReportStatus, markFailed } from '@/db/reports';
 import { inngest } from '@/inngest/client';
 
 const mockCreateReport = vi.mocked(createReport);
 const mockGetReportStatus = vi.mocked(getReportStatus);
+const mockMarkFailed = vi.mocked(markFailed);
 const mockSend = vi.mocked(inngest.send);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ describe('POST /api/reports', () => {
   beforeEach(() => {
     mockCreateReport.mockReset().mockResolvedValue('rid-1');
     mockSend.mockReset().mockResolvedValue(undefined as never);
+    mockMarkFailed.mockReset().mockResolvedValue(undefined as never);
   });
 
   it('returns 201 { id } on a valid body', async () => {
@@ -113,6 +115,14 @@ describe('POST /api/reports', () => {
         rawSubject: VALID_BODY.subject,
       },
     });
+  });
+
+  it('marks the report failed and returns 502 if inngest.send throws', async () => {
+    mockSend.mockRejectedValue(new Error('inngest down'));
+    const res = await POST(makePostRequest(VALID_BODY));
+    expect(res.status).toBe(502);
+    expect(mockCreateReport).toHaveBeenCalledOnce(); // row was created first
+    expect(mockMarkFailed).toHaveBeenCalledWith('rid-1', expect.stringContaining('enqueue'));
   });
 
   it('returns 400 when rawAddress is missing', async () => {
