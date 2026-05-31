@@ -35,12 +35,11 @@ export async function reasonAndSelect(state: GraphState): Promise<Partial<GraphS
 
   const out = await callWithFallback({
     model: process.env.OPENAI_MODEL_REASONING ?? '',
-    // 'low' (not the spec's 'high') because gpt-5.x reasons silently and the
-    // OpenAI edge resets connections that send no response bytes within ~60s;
-    // only low effort reliably emits its first token under that limit on Chat
-    // Completions. High-effort reasoning needs the Responses API background
-    // mode (follow-up). See structuredCall streaming note + scripts/probe-reason.
-    reasoningEffort: 'low',
+    // 'high' per §7.8. structuredCall routes reasoning calls through the OpenAI
+    // Responses API in background mode (create + poll), which isn't subject to the
+    // ~60s edge time-to-first-byte limit that forced 'low' on Chat Completions.
+    // ~150s/call — well within the 5-min report budget.
+    reasoningEffort: 'high',
     schema: ReasonSelectOutputSchema,
     node: 'reasonAndSelect',
     promptVersion: version,

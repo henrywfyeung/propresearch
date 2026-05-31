@@ -1,7 +1,8 @@
 // LLM client — CLAUDE.md §9. Wraps LangChain's ChatOpenAI / ChatAnthropic
-// `.withStructuredOutput()` for Zod-validated output. Chosen over the raw
-// OpenAI SDK because the graph is LangGraph-based and `langfuse-langchain`
-// integrates at the LangChain callback layer (§14.1).
+// `.withStructuredOutput()` for Zod-validated output (langfuse-langchain hooks the
+// LangChain callback layer, §14.1). EXCEPTION: OpenAI *reasoning* calls go straight
+// to the OpenAI SDK Responses API in background mode — Chat Completions can't carry
+// a >60s silent-reasoning request (see runOpenAiReasoning / [§9.1]).
 //
 // Every successful call: writes an llm_calls row SYNCHRONOUSLY (the ledger of
 // truth for cost reconstruction, [R24]) before adding to reportCtx.costUsd.
@@ -16,6 +17,8 @@ import { logger } from '@/lib/observability/logger';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatOpenAI } from '@langchain/openai';
 import { sql } from 'drizzle-orm';
+import OpenAI from 'openai';
+import { zodTextFormat } from 'openai/helpers/zod';
 import { estimateCostUsd } from './costs';
 import type { LlmMessage, StructuredCallOpts } from './types';
 
@@ -47,44 +50,90 @@ function toLangchainMessages(messages: LlmMessage[]): [string, string][] {
   return messages.map((m) => [m.role === 'assistant' ? 'ai' : m.role, m.content]);
 }
 
+// --- OpenAI reasoning via the Responses API (background mode) ----------------
+// gpt-5.x reasons SILENTLY, often >60s at medium/high effort. On Chat Completions
+// the connection resets at the ~60s edge time-to-first-byte limit (and function
+// tools + reasoning_effort isn't supported there at all). The escape is the
+// Responses API in BACKGROUND mode: create() returns immediately, then we poll —
+// no held connection, so the 60s limit never applies. langchain 0.3.14 has no
+// Responses API, so we call the OpenAI SDK directly here. Confirmed live: high
+// effort completes ~158s with full structured output (scripts/probe-responses-bg).
+let openaiClient: OpenAI | undefined;
+function getOpenAi(): OpenAI {
+  if (!openaiClient) openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openaiClient;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+function extractResponsesText(resp: { output_text?: string; output?: unknown }): string {
+  // output_text is a convenience getter but comes back empty on a *retrieved*
+  // background response; fall back to the message item's output_text content.
+  if (typeof resp.output_text === 'string' && resp.output_text.length > 0) return resp.output_text;
+  // biome-ignore lint/suspicious/noExplicitAny: narrowing the Responses output-item union
+  const items = (resp.output as any[]) ?? [];
+  const msg = items.find((o) => o?.type === 'message');
+  const part = msg?.content?.find((c: { type?: string }) => c?.type === 'output_text');
+  return part?.text ?? '';
+}
+
+async function runOpenAiReasoning(
+  model: string,
+  opts: StructuredCallOpts<unknown>,
+): Promise<ModelResult<unknown>> {
+  const client = getOpenAi();
+  const input = opts.messages.map((m) => ({
+    // 'developer' is the reasoning-model equivalent of a system message.
+    role: m.role === 'system' ? ('developer' as const) : m.role,
+    content: m.content,
+  }));
+  let resp = await client.responses.create({
+    model,
+    reasoning: { effort: opts.reasoningEffort as 'low' | 'medium' | 'high' },
+    input,
+    text: { format: zodTextFormat(opts.schema, 'structured_output') },
+    background: true,
+  });
+  const deadline = Date.now() + 280_000; // polls, not a held connection; < Vercel Pro 300s
+  while (resp.status === 'queued' || resp.status === 'in_progress') {
+    if (Date.now() > deadline) {
+      throw new Error(`OpenAI Responses timed out (status=${resp.status}, id=${resp.id})`);
+    }
+    await sleep(2500);
+    resp = await client.responses.retrieve(resp.id);
+  }
+  if (resp.status !== 'completed') {
+    throw new Error(
+      `OpenAI Responses status=${resp.status}${resp.error ? `: ${resp.error.message}` : ''}`,
+    );
+  }
+  return {
+    parsed: opts.schema.parse(JSON.parse(extractResponsesText(resp))),
+    usage: {
+      promptTokens: resp.usage?.input_tokens ?? 0,
+      completionTokens: resp.usage?.output_tokens ?? 0,
+    },
+  };
+}
+
 async function defaultModelRunner(
   provider: Provider,
   model: string,
   opts: StructuredCallOpts<unknown>,
 ): Promise<ModelResult<unknown>> {
-  // gpt-5.x reasoning models reject the function-tool + reasoning_effort combo on
-  // Chat Completions ("use /v1/responses instead") AND reject temperature ≠ 1 while
-  // reasoning. The working shape on our pinned langchain (no Responses API) is the
-  // json_schema response-format method + temperature 1. Confirmed live against
-  // gpt-5.4 with the real schema — see scripts/probe-gpt54*.ts. [§9.1]
-  const openaiReasoning = provider === 'openai' && Boolean(opts.reasoningEffort);
+  // OpenAI reasoning models go through the Responses API in background mode (above).
+  if (provider === 'openai' && opts.reasoningEffort) {
+    return runOpenAiReasoning(model, opts);
+  }
 
+  // Non-reasoning calls (compose, classification, the Claude fallback): langchain
+  // structured output over Chat Completions works fine.
   const chat =
     provider === 'openai'
-      ? new ChatOpenAI({
-          model,
-          temperature: openaiReasoning ? 1 : (opts.temperature ?? 0),
-          // High-effort reasoning calls are long-running; give them a generous
-          // client timeout and retry transient connection errors with backoff
-          // (the SDK retries APIConnectionError up to maxRetries).
-          maxRetries: 2,
-          timeout: openaiReasoning ? 240_000 : 90_000,
-          // Stream reasoning calls so response bytes start flowing before the
-          // ~60s edge time-to-first-byte limit that resets long non-streamed
-          // requests. (gpt-5.x reasons silently, so the effort must be low
-          // enough that the first token lands < 60s — see Node 06 / probes.)
-          ...(openaiReasoning ? { streaming: true } : {}),
-          ...(opts.reasoningEffort
-            ? { modelKwargs: { reasoning_effort: opts.reasoningEffort } }
-            : {}),
-        })
+      ? new ChatOpenAI({ model, temperature: opts.temperature ?? 0, maxRetries: 2 })
       : new ChatAnthropic({ model, temperature: opts.temperature ?? 0 });
 
-  const structured = chat.withStructuredOutput(opts.schema, {
-    includeRaw: true,
-    // Reasoning models need json_schema (response_format), not function tools.
-    ...(openaiReasoning ? { method: 'jsonSchema' as const } : {}),
-  });
+  const structured = chat.withStructuredOutput(opts.schema, { includeRaw: true });
   const result = (await structured.invoke(toLangchainMessages(opts.messages))) as {
     raw: { usage_metadata?: { input_tokens?: number; output_tokens?: number } };
     parsed: unknown;
