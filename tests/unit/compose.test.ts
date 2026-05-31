@@ -21,7 +21,8 @@ const tri = {
 
 beforeEach(() => {
   mockLlm.mockReset();
-  mockLlm.mockResolvedValue([{ type: 'text', text: 'Section narrative prose.' }]);
+  // Compose's schema is now an object { blocks: [...] } (OpenAI rejects array roots).
+  mockLlm.mockResolvedValue({ blocks: [{ type: 'text', text: 'Section narrative prose.' }] });
 });
 
 describe('compose', () => {
@@ -37,6 +38,9 @@ describe('compose', () => {
       'summary',
       'valuation',
     ]);
+    // Text sections carry the unwrapped blocks (guards against the array/object
+    // root regression where out.blocks would be undefined).
+    expect(out.prose?.summary).toEqual([{ type: 'text', text: 'Section narrative prose.' }]);
     const first = out.prose?.valuation?.[0];
     expect(first?.type).toBe('range');
     if (first?.type === 'range') {

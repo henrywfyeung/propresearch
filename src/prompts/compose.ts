@@ -4,7 +4,7 @@
 
 import type { LlmMessage } from '@/tools/llm/types';
 
-export const version = 'v1.0';
+export const version = 'v1.1';
 
 export type ComposeSection = 'summary' | 'subject' | 'valuation' | 'comparables';
 
@@ -40,7 +40,7 @@ export interface ComposeInput {
 }
 
 const VOICE =
-  'Voice: direct, confident, specific. No marketing language. Plain Australian English. Prices in AUD. Output ONLY a JSON array of {"type":"text","text":"..."} blocks of narrative prose.';
+  'Voice: direct, confident, specific. No marketing language. Plain Australian English. Prices in AUD. Output ONLY a JSON object of the form {"blocks": [{"type":"text","text":"..."}]} whose "blocks" array holds the narrative prose blocks in order.';
 
 const SECTION_BRIEF: Record<ComposeSection, string> = {
   summary:

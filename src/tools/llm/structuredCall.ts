@@ -52,20 +52,39 @@ async function defaultModelRunner(
   model: string,
   opts: StructuredCallOpts<unknown>,
 ): Promise<ModelResult<unknown>> {
+  // gpt-5.x reasoning models reject the function-tool + reasoning_effort combo on
+  // Chat Completions ("use /v1/responses instead") AND reject temperature ≠ 1 while
+  // reasoning. The working shape on our pinned langchain (no Responses API) is the
+  // json_schema response-format method + temperature 1. Confirmed live against
+  // gpt-5.4 with the real schema — see scripts/probe-gpt54*.ts. [§9.1]
+  const openaiReasoning = provider === 'openai' && Boolean(opts.reasoningEffort);
+
   const chat =
     provider === 'openai'
       ? new ChatOpenAI({
           model,
-          temperature: opts.temperature ?? 0,
-          // reasoning_effort is passed through modelKwargs; the exact wiring
-          // must be confirmed once the real GPT-5 model id is pinned (§9.1).
+          temperature: openaiReasoning ? 1 : (opts.temperature ?? 0),
+          // High-effort reasoning calls are long-running; give them a generous
+          // client timeout and retry transient connection errors with backoff
+          // (the SDK retries APIConnectionError up to maxRetries).
+          maxRetries: 2,
+          timeout: openaiReasoning ? 240_000 : 90_000,
+          // Stream reasoning calls so response bytes start flowing before the
+          // ~60s edge time-to-first-byte limit that resets long non-streamed
+          // requests. (gpt-5.x reasons silently, so the effort must be low
+          // enough that the first token lands < 60s — see Node 06 / probes.)
+          ...(openaiReasoning ? { streaming: true } : {}),
           ...(opts.reasoningEffort
             ? { modelKwargs: { reasoning_effort: opts.reasoningEffort } }
             : {}),
         })
       : new ChatAnthropic({ model, temperature: opts.temperature ?? 0 });
 
-  const structured = chat.withStructuredOutput(opts.schema, { includeRaw: true });
+  const structured = chat.withStructuredOutput(opts.schema, {
+    includeRaw: true,
+    // Reasoning models need json_schema (response_format), not function tools.
+    ...(openaiReasoning ? { method: 'jsonSchema' as const } : {}),
+  });
   const result = (await structured.invoke(toLangchainMessages(opts.messages))) as {
     raw: { usage_metadata?: { input_tokens?: number; output_tokens?: number } };
     parsed: unknown;

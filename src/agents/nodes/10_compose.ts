@@ -10,7 +10,11 @@ import { callWithFallback } from '@/tools/llm/structuredCall';
 import { z } from 'zod';
 
 const SECTIONS: ComposeSection[] = ['summary', 'subject', 'valuation', 'comparables'];
-const TextBlocksSchema = z.array(z.object({ type: z.literal('text'), text: z.string().min(1) }));
+// Wrapped in an object: OpenAI structured output requires the root schema to be
+// an object, not a top-level array (the 'extract' function rejects array roots).
+const TextBlocksSchema = z.object({
+  blocks: z.array(z.object({ type: z.literal('text'), text: z.string().min(1) })),
+});
 
 function toCompSummary(c: Comparable): ComposeInput['selectedComps'][number] {
   return {
@@ -43,14 +47,14 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
 
   const entries = await Promise.all(
     SECTIONS.map(async (section): Promise<[ComposeSection, ClaimBlock[]]> => {
-      const blocks = await callWithFallback({
+      const out = await callWithFallback({
         model: process.env.OPENAI_MODEL_COMPOSE ?? '',
         schema: TextBlocksSchema,
         node: `compose:${section}`,
         promptVersion: version,
         messages: buildMessages(section, input),
       });
-      return [section, blocks];
+      return [section, out.blocks];
     }),
   );
 
