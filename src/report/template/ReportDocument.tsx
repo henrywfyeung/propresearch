@@ -11,7 +11,7 @@
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
-import type { Comparable } from '@/schemas/state';
+import type { Comparable, RiskFlag } from '@/schemas/state';
 import { type ReactElement, createElement as h } from 'react';
 
 export interface ReportData {
@@ -35,6 +35,7 @@ export interface ReportData {
     uncertaintyNote: string | null;
   } | null;
   comparables: Comparable[];
+  risks: RiskFlag[];
   prose: ReportProse;
   generatedAt: string; // ISO
 }
@@ -79,7 +80,19 @@ export const reportStyles = `
   .badge { font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; padding: 1.5px 6px;
     border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); white-space: nowrap; }
   .badge.anchor { color: #8A5A00; border-color: #C99A00; }
+  .badge.sev-critical { color: #C9302C; border-color: #C9302C; }
+  .badge.sev-high     { color: #C9302C; border-color: #C9302C; }
+  .badge.sev-medium   { color: #8A5A00; border-color: #C99A00; }
+  .badge.sev-low      { color: var(--muted); border-color: var(--line); }
+  .badge.sev-informational { color: var(--muted); border-color: var(--line); }
   .src { font-size: 7.5pt; color: var(--muted); margin-top: 4px; }
+  .risk-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid var(--line); break-inside: avoid; }
+  .risk-row:last-child { border-bottom: none; }
+  .risk-row .risk-cat { font-size: 9pt; font-weight: 600; min-width: 90px; text-transform: capitalize; }
+  .risk-row .risk-desc { font-size: 9pt; flex: 1; }
+  .risk-row.unavailable .risk-cat,
+  .risk-row.unavailable .risk-desc { color: var(--muted); }
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
 `;
@@ -99,8 +112,25 @@ function attr(label: string, value: string): ReactElement {
   );
 }
 
+function severityClass(sev: RiskFlag['severity']): string {
+  return `sev-${sev}`;
+}
+
+function riskRow(flag: RiskFlag): ReactElement {
+  const rowClass = `risk-row${flag.dataAvailable ? '' : ' unavailable'}`;
+  const chipLabel = flag.dataAvailable ? flag.severity : 'data unavailable';
+  const chipClass = `badge ${flag.dataAvailable ? severityClass(flag.severity) : 'sev-low'}`;
+  return h(
+    'div',
+    { key: flag.category, className: rowClass },
+    h('span', { className: 'risk-cat' }, flag.category),
+    h('span', { className: chipClass }, chipLabel),
+    h('span', { className: 'risk-desc' }, flag.description),
+  );
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
-  const { subject, triangulation, prose, comparables } = data;
+  const { subject, triangulation, prose, comparables, risks } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
   );
@@ -225,6 +255,14 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     ...compCards,
   );
 
+  const riskSection = h(
+    'section',
+    { key: 'risks' },
+    h('h2', null, 'Risk register'),
+    ...paragraphs(prose.risks),
+    ...risks.map(riskRow),
+  );
+
   const footer = h(
     'footer',
     null,
@@ -240,6 +278,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     subjectSection,
     valuation,
     comparablesSection,
+    riskSection,
     footer,
   );
 }

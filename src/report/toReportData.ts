@@ -25,6 +25,7 @@ export function toReportData(state: GraphState): ReportData | null {
         }
       : null,
     comparables: state.comparables,
+    risks: state.risks ?? [],
     prose: state.prose,
     generatedAt: new Date().toISOString(),
   };
