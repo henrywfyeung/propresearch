@@ -16,6 +16,14 @@ import {
 vi.mock('@/tools/llm/structuredCall', () => ({ callWithFallback: vi.fn() }));
 const mockLlm = vi.mocked(callWithFallback);
 
+import { uploadPdf } from '@/tools/storage/s3';
+vi.mock('@/report/pdf', () => ({
+  renderReportPdf: vi.fn().mockResolvedValue(new Uint8Array([1])),
+}));
+vi.mock('@/tools/storage/s3', () => ({
+  uploadPdf: vi.fn().mockResolvedValue('reports/r1/v1.pdf'),
+}));
+
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
@@ -86,6 +94,8 @@ describe('reportGraph', () => {
     expect(state.comparables.find((c) => c.id === 'NEAR')?.selection).toBe('fair-value');
     expect(state.triangulation?.reconciled).toBeGreaterThan(0);
     expect(state.prose.valuation?.[0]?.type).toBe('range');
+    expect(state.pdfUrl).toBe('reports/r1/v1.pdf');
+    expect(vi.mocked(uploadPdf)).toHaveBeenCalled();
     expect(state.errors).toEqual([]);
   });
 
