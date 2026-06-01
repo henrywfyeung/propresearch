@@ -12,6 +12,7 @@ import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
+import type { SubjectVision } from '@/schemas/vision';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 import { type ReactElement, createElement as h } from 'react';
 
@@ -44,6 +45,10 @@ export interface ReportData {
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
   staticMapDataUrl: string | null;
+  /** Listing photo URLs from user-supplied photos (node 04a input). */
+  photos: string[];
+  /** Visual inspection result from node 04a, or null when vision was skipped/failed. */
+  subjectVision: SubjectVision | null;
 }
 
 const ACCENT = '#1F3864';
@@ -119,6 +124,22 @@ export const reportStyles = `
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
   .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
   .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 4px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 12px; }
+  .photo-grid img { width: 100%; height: 52mm; object-fit: cover; border-radius: 3px; border: 1px solid var(--line); display: block; }
+  .condition-chip { display: inline-block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .09em;
+    padding: 2px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; margin-right: 6px; }
+  .condition-chip.positive { color: #1B7F4B; border-color: #1B7F4B; }
+  .condition-chip.accent { color: #8A5A00; border-color: #C99A00; }
+  .condition-chip.danger { color: #C9302C; border-color: #C9302C; }
+  .staging-chip { display: inline-block; font-size: 7.5pt; color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .vision-comment { font-size: 9.5pt; font-style: italic; margin: 8px 0 8px; color: var(--ink); }
+  .vision-list { margin: 4px 0 8px; padding-left: 16px; }
+  .vision-list li { font-size: 9pt; margin-bottom: 2px; }
+  .vision-list.red-flags li { color: #C9302C; }
+  .vision-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .vision-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 6px 0 2px; }
+  .vision-unavailable { font-size: 9pt; color: var(--muted); font-style: italic; padding: 4px 0; }
 `;
 
 function paragraphs(blocks: ClaimBlock[] | undefined): ReactElement[] {
@@ -225,6 +246,111 @@ function renderDemographicsBlock(demo: SuburbDemographics): ReactElement {
   );
 }
 
+const PHOTO_DISPLAY_MAX = 6;
+
+/**
+ * Condition chip colour class — CLAUDE.md §7.4 frozen enums:
+ *   excellent/good → positive (green)
+ *   fair           → accent  (amber)
+ *   poor/unliveable → danger (red)
+ */
+function conditionChipClass(condition: SubjectVision['condition']): string {
+  if (condition === 'excellent' || condition === 'good') return 'positive';
+  if (condition === 'fair') return 'accent';
+  return 'danger';
+}
+
+/**
+ * Renders the "Property condition & visual inspection" section.
+ * Returns null when both photos and subjectVision are absent.
+ */
+function renderVisualInspection(
+  photos: string[],
+  vision: SubjectVision | null,
+): ReactElement | null {
+  const displayPhotos = photos.slice(0, PHOTO_DISPLAY_MAX);
+  const hasPhotos = displayPhotos.length > 0;
+
+  // Whole section omitted when nothing to show.
+  if (!hasPhotos && vision === null) return null;
+
+  const children: ReactElement[] = [
+    h('h2', { key: 'h' }, 'Property condition & visual inspection'),
+  ];
+
+  // Photo grid
+  if (hasPhotos) {
+    children.push(
+      h(
+        'div',
+        { key: 'grid', className: 'photo-grid' },
+        ...displayPhotos.map((src, i) =>
+          h('img', {
+            key: `photo-${i}`,
+            src,
+            alt: `Listing photo ${i + 1}`,
+          }),
+        ),
+      ),
+    );
+  }
+
+  // Vision block
+  if (vision !== null) {
+    // Meta row: condition chip + staging chip
+    children.push(
+      h(
+        'div',
+        { key: 'meta', className: 'vision-meta' },
+        h(
+          'span',
+          { className: `condition-chip ${conditionChipClass(vision.condition)}` },
+          vision.condition,
+        ),
+        h('span', { className: 'staging-chip' }, vision.staging.replace(/-/g, ' ')),
+      ),
+    );
+
+    // Comment
+    children.push(h('p', { key: 'comment', className: 'vision-comment' }, `"${vision.comment}"`));
+
+    // Presentation factors
+    if (vision.presentationFactors.length > 0) {
+      children.push(h('div', { key: 'pfl', className: 'vision-label' }, 'Presentation'));
+      children.push(
+        h(
+          'ul',
+          { key: 'pf', className: 'vision-list' },
+          ...vision.presentationFactors.map((f, i) => h('li', { key: `pf-${i}` }, f)),
+        ),
+      );
+    }
+
+    // Red flags
+    if (vision.redFlags.length > 0) {
+      children.push(h('div', { key: 'rfl', className: 'vision-label' }, 'Red flags'));
+      children.push(
+        h(
+          'ul',
+          { key: 'rf', className: 'vision-list red-flags' },
+          ...vision.redFlags.map((f, i) => h('li', { key: `rf-${i}` }, f)),
+        ),
+      );
+    }
+  } else if (hasPhotos) {
+    // Photos present but vision skipped/failed
+    children.push(
+      h(
+        'p',
+        { key: 'unavail', className: 'vision-unavailable' },
+        'Automated visual inspection unavailable.',
+      ),
+    );
+  }
+
+  return h('section', { key: 'visual-inspection' }, ...children);
+}
+
 function renderSuburbMarket(
   stats: SuburbStats | null,
   blocks: ClaimBlock[] | undefined,
@@ -280,6 +406,8 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     suburbStats,
     demographics,
     staticMapDataUrl: mapDataUrl,
+    photos,
+    subjectVision,
   } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
@@ -472,6 +600,8 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         )
       : null;
 
+  const visualInspectionSection = renderVisualInspection(photos, subjectVision);
+
   return h(
     'div',
     { className: 'doc' },
@@ -479,6 +609,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     summary,
     subjectSection,
     locationSection,
+    visualInspectionSection,
     valuation,
     comparablesSection,
     marketSection,

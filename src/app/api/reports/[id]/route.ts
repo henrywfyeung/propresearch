@@ -19,6 +19,7 @@ import { requireAllowedUser } from '@/lib/auth/user';
 const NODE_ORDER = [
   'resolveAddress',
   'fetchCandidateComps',
+  'visionSubject',
   'fetchRisks',
   'fetchPlanning',
   'fetchDemographics',

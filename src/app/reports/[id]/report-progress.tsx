@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 export const NODE_LABELS: Record<string, string> = {
   resolveAddress: 'Resolving address…',
   fetchCandidateComps: 'Finding comparable sales…',
+  visionSubject: 'Inspecting property photos…',
   fetchRisks: 'Assessing risks…',
   fetchPlanning: 'Pulling planning activity…',
   fetchDemographics: 'Gathering suburb demographics…',
@@ -26,6 +27,7 @@ export const NODE_LABELS: Record<string, string> = {
 export const NODE_ORDER = [
   'resolveAddress',
   'fetchCandidateComps',
+  'visionSubject',
   'fetchRisks',
   'fetchPlanning',
   'fetchDemographics',

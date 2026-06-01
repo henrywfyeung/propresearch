@@ -26,6 +26,7 @@ describe('NODE_LABELS', () => {
   it('includes the expected CLAUDE.md §15.2 labels', () => {
     expect(NODE_LABELS.resolveAddress).toBe('Resolving address…');
     expect(NODE_LABELS.fetchCandidateComps).toBe('Finding comparable sales…');
+    expect(NODE_LABELS.visionSubject).toBe('Inspecting property photos…');
     expect(NODE_LABELS.fetchRisks).toBe('Assessing risks…');
     expect(NODE_LABELS.fetchPlanning).toBe('Pulling planning activity…');
     expect(NODE_LABELS.reasonAndSelect).toBe('Selecting best comparables…');

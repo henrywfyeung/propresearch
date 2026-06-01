@@ -34,5 +34,7 @@ export function toReportData(state: GraphState): ReportData | null {
     generatedAt: new Date().toISOString(),
     // Populated by the render node after fetching the static map.
     staticMapDataUrl: null,
+    photos: subject.photos ?? [],
+    subjectVision: subject.visionAnalysis ?? null,
   };
 }

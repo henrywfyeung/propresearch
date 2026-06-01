@@ -1,6 +1,7 @@
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
 import type { RecentDA, RiskFlag } from '@/schemas/state';
+import type { SubjectVision } from '@/schemas/vision';
 import { describe, expect, it } from 'vitest';
 
 const data: ReportData = {
@@ -48,6 +49,8 @@ const data: ReportData = {
   },
   generatedAt: '2026-05-31T00:00:00.000Z',
   staticMapDataUrl: null,
+  photos: [],
+  subjectVision: null,
 };
 
 describe('renderReportHtml', () => {
@@ -409,5 +412,100 @@ describe('Location map rendering', () => {
     const valuationIdx = html.indexOf('Valuation');
     expect(subjectIdx).toBeLessThan(locationIdx);
     expect(locationIdx).toBeLessThan(valuationIdx);
+  });
+});
+
+describe('Visual inspection rendering', () => {
+  const PHOTO_URL = 'https://example.com/photo1.jpg';
+  const PHOTO_URL_2 = 'https://example.com/photo2.jpg';
+
+  const fullVision: SubjectVision = {
+    condition: 'good',
+    staging: 'professionally-staged',
+    presentationFactors: ['Fresh paint', 'Updated kitchen'],
+    redFlags: ['Staining on ceiling'],
+    comment:
+      'The property presents well with a contemporary renovation throughout the main living areas.',
+  };
+
+  it('renders the section heading, an img with the photo src, condition, and comment', () => {
+    const html = renderReportHtml({ ...data, photos: [PHOTO_URL], subjectVision: fullVision });
+    expect(html).toContain('Property condition &amp; visual inspection');
+    expect(html).toContain(PHOTO_URL);
+    expect(html).toContain('good');
+    expect(html).toContain(
+      'The property presents well with a contemporary renovation throughout the main living areas.',
+    );
+  });
+
+  it('renders a red flag with danger styling', () => {
+    const html = renderReportHtml({ ...data, photos: [PHOTO_URL], subjectVision: fullVision });
+    expect(html).toContain('Staining on ceiling');
+    expect(html).toContain('red-flags');
+  });
+
+  it('renders presentation factors when present', () => {
+    const html = renderReportHtml({ ...data, photos: [PHOTO_URL], subjectVision: fullVision });
+    expect(html).toContain('Fresh paint');
+    expect(html).toContain('Updated kitchen');
+  });
+
+  it('omits the whole section when photos is empty AND subjectVision is null', () => {
+    const html = renderReportHtml({ ...data, photos: [], subjectVision: null });
+    expect(html).not.toContain('Property condition');
+    expect(html).not.toContain('visual inspection');
+  });
+
+  it('renders photo grid + unavailable note when photos exist but vision is null', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [PHOTO_URL, PHOTO_URL_2],
+      subjectVision: null,
+    });
+    expect(html).toContain('Property condition');
+    expect(html).toContain(PHOTO_URL);
+    expect(html).toContain(PHOTO_URL_2);
+    expect(html).toContain('Automated visual inspection unavailable.');
+    // No condition chip element (CSS class exists in <style> but no element with that class)
+    expect(html).not.toContain('class="condition-chip');
+  });
+
+  it('caps photos at 6', () => {
+    const manyPhotos = Array.from({ length: 10 }, (_, i) => `https://example.com/p${i}.jpg`);
+    const html = renderReportHtml({ ...data, photos: manyPhotos, subjectVision: null });
+    // Only first 6 should appear
+    for (let i = 0; i < 6; i++) {
+      expect(html).toContain(`https://example.com/p${i}.jpg`);
+    }
+    expect(html).not.toContain('https://example.com/p6.jpg');
+  });
+
+  it('condition chip class reflects the condition enum (poor → danger, excellent → positive)', () => {
+    const poorVision: SubjectVision = { ...fullVision, condition: 'poor' };
+    const excellentVision: SubjectVision = { ...fullVision, condition: 'excellent' };
+    const htmlPoor = renderReportHtml({ ...data, photos: [PHOTO_URL], subjectVision: poorVision });
+    const htmlExcellent = renderReportHtml({
+      ...data,
+      photos: [PHOTO_URL],
+      subjectVision: excellentVision,
+    });
+    expect(htmlPoor).toContain('danger');
+    expect(htmlExcellent).toContain('positive');
+  });
+
+  it('visual inspection section appears after location map and before valuation', () => {
+    const MAP_DATA_URL =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const html = renderReportHtml({
+      ...data,
+      staticMapDataUrl: MAP_DATA_URL,
+      photos: [PHOTO_URL],
+      subjectVision: fullVision,
+    });
+    const locationIdx = html.indexOf('Location');
+    const inspectionIdx = html.indexOf('Property condition');
+    const valuationIdx = html.indexOf('Valuation');
+    expect(locationIdx).toBeLessThan(inspectionIdx);
+    expect(inspectionIdx).toBeLessThan(valuationIdx);
   });
 });
