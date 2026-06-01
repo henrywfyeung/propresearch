@@ -4,7 +4,7 @@
 import { type LatLng, haversineMeters } from '@/lib/geo';
 import type { SourceRef } from '@/schemas/sources';
 import type { Comparable } from '@/schemas/state';
-import { type ReaSoldListing, reaSearchSold, withSize } from '@/tools/rapidapi/rea';
+import { type ReaSoldListing, reaListingUrl, reaSearchSold, withSize } from '@/tools/rapidapi/rea';
 
 // REA propertyType vocab → the canonical vocab similarity scoring expects.
 // 'House' is load-bearing: similarityScore only applies the land-area term for
@@ -86,6 +86,7 @@ export function toComparable(l: ReaSoldListing, subject: LatLng): Comparable | n
     landArea: landToM2(l.landSize),
     propertyType: mapReaPropertyType(l.propertyType),
     photos: photoUrls(l),
+    listingUrl: reaListingUrl(l),
     visionAnalysis: null,
     similarityScore: 0,
     selection: 'candidate',

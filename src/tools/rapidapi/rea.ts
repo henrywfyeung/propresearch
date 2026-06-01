@@ -81,8 +81,32 @@ export const ReaSoldListingSchema = z.object({
   mainImage: z
     .object({ server: z.string(), uri: z.string(), name: z.string().nullish() })
     .nullish(),
+  // Canonical listing URL. REA returns a relative SEO slug in `prettyUrl`
+  // (e.g. "property-apartment-nsw-mosman-151336940") and the absolute form in
+  // `_links.prettyUrl.href`. We prefer the absolute href so the PDF deep-links
+  // each comp to its own listing page rather than the REA homepage.
+  prettyUrl: z.string().nullish(),
+  _links: z
+    .object({ prettyUrl: z.object({ href: z.string() }).nullish() })
+    .nullish(),
 });
 export type ReaSoldListing = z.infer<typeof ReaSoldListingSchema>;
+
+const REA_BASE_URL = 'https://www.realestate.com.au';
+
+/**
+ * Resolve a sold listing's canonical realestate.com.au page URL.
+ * Prefers the absolute `_links.prettyUrl.href`, then the relative `prettyUrl`
+ * slug, and finally the bare-id short form `…/{listingId}` (REA's own
+ * `_links.short.href` format). Returns null if nothing usable is present.
+ */
+export function reaListingUrl(l: ReaSoldListing): string | null {
+  const abs = l._links?.prettyUrl?.href;
+  if (abs?.startsWith('http')) return abs;
+  if (l.prettyUrl) return `${REA_BASE_URL}/${l.prettyUrl.replace(/^\//, '')}`;
+  if (l.listingId) return `${REA_BASE_URL}/${l.listingId}`;
+  return null;
+}
 
 // Lenient envelope — the listing array is validated per-item below.
 const ReaSearchResponse = z.object({

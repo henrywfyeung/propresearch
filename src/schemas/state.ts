@@ -85,6 +85,9 @@ export const ComparableSchema = z.object({
   landArea: z.number().nonnegative().nullable(),
   propertyType: z.string(),
   photos: z.array(z.string().url()),
+  // Canonical listing page URL (REA), used to deep-link the comp's "Source" line
+  // in the PDF. Nullish so non-REA / older fixtures need not set it.
+  listingUrl: z.string().url().nullish(),
   visionAnalysis: CompVisionSchema.nullable(),
   similarityScore: z.number().min(0).max(100),
   selection: z.enum(['fair-value', 'negotiation-anchor', 'rejected', 'candidate']),

@@ -101,6 +101,7 @@ export const reportStyles = `
   .badge.sev-low      { color: var(--muted); border-color: var(--line); }
   .badge.sev-informational { color: var(--muted); border-color: var(--line); }
   .src { font-size: 7.5pt; color: var(--muted); margin-top: 4px; }
+  .src-link { color: var(--accent); text-decoration: underline; }
   .risk-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
     border-bottom: 1px solid var(--line); break-inside: avoid; }
   .risk-row:last-child { border-bottom: none; }
@@ -552,7 +553,18 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
           c.selection === 'negotiation-anchor' ? 'anchor' : 'fair value',
         ),
       ),
-      h('div', { className: 'src' }, 'Source: realestate.com.au'),
+      h(
+        'div',
+        { className: 'src' },
+        'Source: ',
+        c.listingUrl
+          ? h(
+              'a',
+              { href: c.listingUrl, target: '_blank', rel: 'noreferrer', className: 'src-link' },
+              'realestate.com.au',
+            )
+          : 'realestate.com.au',
+      ),
     ),
   );
   const comparablesSection = h(

@@ -1,6 +1,6 @@
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
-import type { RecentDA, RiskFlag } from '@/schemas/state';
+import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
 import type { SubjectVision } from '@/schemas/vision';
 import { describe, expect, it } from 'vitest';
 
@@ -594,5 +594,49 @@ describe('Visual inspection rendering', () => {
       subjectVision: null,
     });
     expect(html).not.toContain('Floor plan');
+  });
+});
+
+describe('Comparable source link rendering', () => {
+  const comp = (listingUrl: string | null): Comparable => ({
+    id: '150833140',
+    address: '12/22 Warringah Road, Mosman NSW 2088',
+    salePrice: 1_030_000,
+    contractDate: '2026-05-26',
+    distanceM: 120,
+    lat: -33.818,
+    lng: 151.245,
+    beds: 2,
+    baths: 2,
+    landArea: null,
+    propertyType: 'ApartmentUnitFlat',
+    photos: [],
+    listingUrl,
+    visionAnalysis: null,
+    similarityScore: 88,
+    selection: 'fair-value',
+    adjustments: [],
+    adjustedValue: 1_050_000,
+    adjustmentNarrative: null,
+    source: {
+      provider: 'rea',
+      endpoint: '/properties/search?channel=sold',
+      fetchedAt: '2026-05-31T00:00:00.000Z',
+      path: '/comparables/0/salePrice',
+    },
+  });
+
+  it('renders the source as a deep-link to the listing page when listingUrl is set', () => {
+    const href = 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140';
+    const html = renderReportHtml({ ...data, comparables: [comp(href)] });
+    expect(html).toContain(`href="${href}"`);
+    expect(html).toContain('class="src-link"');
+    expect(html).toContain('Source: ');
+  });
+
+  it('renders plain-text source (no link) when listingUrl is null', () => {
+    const html = renderReportHtml({ ...data, comparables: [comp(null)] });
+    expect(html).toContain('Source: realestate.com.au');
+    expect(html).not.toContain('class="src-link"');
   });
 });

@@ -1,7 +1,7 @@
 // tests/unit/reaComps.test.ts
 import { ComparableSchema } from '@/schemas/state';
 import { mapReaPropertyType, parseAudPrice, toComparable } from '@/tools/comps/reaComps';
-import type { ReaSoldListing } from '@/tools/rapidapi/rea';
+import { type ReaSoldListing, reaListingUrl } from '@/tools/rapidapi/rea';
 import { describe, expect, it } from 'vitest';
 
 const SUBJECT = { lat: -33.8184, lng: 151.2454 };
@@ -70,11 +70,49 @@ describe('toComparable', () => {
     expect(c?.landArea).toBe(1200);
   });
 
+  it('deep-links listingUrl to the canonical listing page (not the homepage)', () => {
+    const c = toComparable(
+      {
+        ...base,
+        _links: { prettyUrl: { href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140' } },
+      },
+      SUBJECT,
+    );
+    expect(c?.listingUrl).toBe('https://www.realestate.com.au/property-apartment-nsw-mosman-150833140');
+  });
+
+  it('falls back to the bare-id short URL when no prettyUrl is present', () => {
+    const c = toComparable(base, SUBJECT); // base has no _links/prettyUrl
+    expect(c?.listingUrl).toBe('https://www.realestate.com.au/150833140');
+  });
+
   it('returns null when the price is withheld', () => {
     expect(toComparable({ ...base, price: { display: 'Price Withheld' } }, SUBJECT)).toBeNull();
   });
 
   it('returns null when geo is missing', () => {
     expect(toComparable({ ...base, address: { streetAddress: '1 X St' } }, SUBJECT)).toBeNull();
+  });
+});
+
+describe('reaListingUrl', () => {
+  it('prefers the absolute _links.prettyUrl.href', () => {
+    expect(
+      reaListingUrl({
+        ...base,
+        prettyUrl: 'property-apartment-nsw-mosman-150833140',
+        _links: { prettyUrl: { href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140' } },
+      }),
+    ).toBe('https://www.realestate.com.au/property-apartment-nsw-mosman-150833140');
+  });
+
+  it('builds an absolute URL from the relative prettyUrl slug', () => {
+    expect(reaListingUrl({ ...base, prettyUrl: 'property-apartment-nsw-mosman-150833140' })).toBe(
+      'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140',
+    );
+  });
+
+  it('falls back to the bare listingId short URL', () => {
+    expect(reaListingUrl(base)).toBe('https://www.realestate.com.au/150833140');
   });
 });
