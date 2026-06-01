@@ -4,6 +4,7 @@
 import type { GraphState } from '@/agents/annotation';
 import { logger } from '@/lib/observability/logger';
 import { fetchImagesAsDataUrls } from '@/report/fetchImages';
+import { selectedMapComps } from '@/report/mapComps';
 import { renderReportPdf } from '@/report/pdf';
 import { renderReportHtml } from '@/report/render';
 import { toReportData } from '@/report/toReportData';
@@ -21,16 +22,15 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
   // Fetch the static location map. Failures degrade gracefully (null → no map in PDF).
   const addr = state.resolvedAddress;
   if (addr) {
-    const selectedComps = state.comparables
-      .filter(
-        (c) =>
-          (c.selection === 'fair-value' || c.selection === 'negotiation-anchor') &&
-          c.lat != null &&
-          c.lng != null,
-      )
-      .map((c) => ({ lat: c.lat as number, lng: c.lng as number }));
+    // Number the pins 1..N in the same order ReportDocument numbers the legend
+    // (both use selectedMapComps) so pin "3" === legend row "3".
+    const mapComps = selectedMapComps(state.comparables).map((c, i) => ({
+      lat: c.lat as number,
+      lng: c.lng as number,
+      label: String(i + 1),
+    }));
 
-    data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, selectedComps);
+    data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, mapComps);
   }
 
   // Download listing photos + floor plans as base64 data URLs so Puppeteer doesn't

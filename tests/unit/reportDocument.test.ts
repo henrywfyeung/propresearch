@@ -640,3 +640,50 @@ describe('Comparable source link rendering', () => {
     expect(html).not.toContain('class="src-link"');
   });
 });
+
+describe('Map legend rendering', () => {
+  const MAP =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const mapComp = (id: string, address: string, price: number): Comparable => ({
+    id,
+    address,
+    salePrice: price,
+    contractDate: '2026-04-01',
+    distanceM: 250,
+    lat: -33.83,
+    lng: 151.24,
+    beds: 2,
+    baths: 2,
+    landArea: null,
+    propertyType: 'ApartmentUnitFlat',
+    photos: [],
+    listingUrl: null,
+    visionAnalysis: null,
+    similarityScore: 85,
+    selection: 'fair-value',
+    adjustments: [],
+    adjustedValue: null,
+    adjustmentNarrative: null,
+    source: { provider: 'rea', endpoint: '/x', fetchedAt: '2026-04-01T00:00:00.000Z', path: '/comparables/0/salePrice' },
+  });
+
+  it('renders a numbered price legend keyed to the map pins', () => {
+    const comps = [
+      mapComp('a', '5/116 Belmont Road, Mosman NSW 2088', 1_805_000),
+      mapComp('b', '6/16 Bardwell Road, Mosman NSW 2088', 1_325_000),
+    ];
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP, comparables: comps });
+    expect(html).toContain('class="map-legend"'); // rendered element, not the CSS rule
+    // street address (comma-stripped) + sale price both surfaced (NBSP after $)
+    expect(html).toContain('5/116 Belmont Road');
+    expect(html).toContain('1,805,000');
+    expect(html).toContain('1,325,000');
+    expect(html).toContain('keyed below');
+  });
+
+  it('omits the legend when there are no selected comps', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP, comparables: [] });
+    expect(html).not.toContain('class="map-legend"');
+    expect(html).not.toContain('keyed below');
+  });
+});

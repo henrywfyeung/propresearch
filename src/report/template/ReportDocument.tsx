@@ -9,6 +9,7 @@
 // tsconfig uses `jsx: preserve`, which tsx/esbuild won't transform.
 
 import { priceChartSvg } from '@/report/charts/priceChart';
+import { selectedMapComps } from '@/report/mapComps';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
@@ -70,9 +71,13 @@ export const reportStyles = `
   .masthead .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: 7.5pt; opacity: .8; margin: 0 0 6px; }
   .masthead h1 { font-size: 17pt; margin: 0 0 4px; font-weight: 600; letter-spacing: -.01em; }
   .masthead .sub { font-size: 9.5pt; opacity: .85; margin: 0; }
-  section { margin: 0 0 20px; break-inside: avoid; }
+  section { margin: 0 0 18px; break-inside: avoid; }
+  /* Hairline divider + breathing room between consecutive sections so they read
+     as cleanly separated blocks rather than running together. */
+  section + section { border-top: 1px solid var(--line); padding-top: 18px; }
   h2 { font-size: 8pt; text-transform: uppercase; letter-spacing: .12em; color: var(--accent);
-    border-bottom: 1.5px solid var(--accent); padding-bottom: 4px; margin: 0 0 10px; }
+    border-bottom: 1.5px solid var(--accent); padding-bottom: 4px; margin: 0 0 10px;
+    break-after: avoid; }
   p { margin: 0 0 8px; }
   .value-callout { border: 1px solid var(--line); border-left: 3px solid var(--accent);
     border-radius: 4px; padding: 14px 16px; margin: 0 0 12px; display: flex; align-items: baseline; gap: 14px; }
@@ -129,7 +134,13 @@ export const reportStyles = `
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
   .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
   .location-map-link { display: block; text-decoration: none; border: 0; }
-  .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 4px; }
+  .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 6px; }
+  .map-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; margin: 0 0 2px; }
+  .map-legend-item { display: flex; align-items: center; gap: 7px; font-size: 8.5pt; break-inside: avoid; }
+  .map-legend-n { flex: none; width: 15px; height: 15px; line-height: 15px; text-align: center;
+    border-radius: 50%; background: #5b6573; color: #fff; font-size: 7pt; font-weight: 600; }
+  .map-legend-addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .map-legend-price { color: var(--accent); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 12px; }
   .photo-grid img { width: 100%; height: 52mm; object-fit: cover; border-radius: 3px; border: 1px solid var(--line); display: block; }
   .condition-chip { display: inline-block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .09em;
@@ -631,6 +642,27 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     alt: 'Location map showing subject property and comparable sales',
     className: 'location-map',
   });
+  // Numbered price legend, keyed to the numbered comp pins on the map (both use
+  // selectedMapComps, so pin "3" === legend row "3"). Surfaces each comp's sale
+  // price right next to its dot.
+  const legendComps = selectedMapComps(comparables);
+  const mapLegend =
+    legendComps.length > 0
+      ? h(
+          'div',
+          { className: 'map-legend' },
+          ...legendComps.map((c, i) =>
+            h(
+              'div',
+              { key: c.id, className: 'map-legend-item' },
+              h('span', { className: 'map-legend-n num' }, String(i + 1)),
+              h('span', { className: 'map-legend-addr' }, (c.address.split(',')[0] ?? c.address).trim()),
+              h('span', { className: 'map-legend-price num' }, formatValue(c.salePrice, 'currency-aud')),
+            ),
+          ),
+        )
+      : null;
+
   const locationSection =
     mapDataUrl != null
       ? h(
@@ -652,10 +684,12 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
           h(
             'p',
             { className: 'location-map-caption' },
-            mapHref
-              ? 'Navy pin — subject property. Grey pins — selected comparable sales. Click the map to open it interactively (satellite, Street View, directions).'
-              : 'Navy pin — subject property. Grey pins — selected comparable sales.',
+            legendComps.length > 0
+              ? 'Navy home pin marks the subject property; numbered pins mark comparable sales (keyed below, with sale prices).'
+              : 'Navy home pin marks the subject property.',
+            mapHref ? ' Click the map to open it interactively (satellite, Street View, directions).' : '',
           ),
+          mapLegend,
         )
       : null;
 

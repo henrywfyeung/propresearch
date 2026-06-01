@@ -9,10 +9,16 @@ import { logger } from '@/lib/observability/logger';
 /** Maximum number of comp markers added to keep the URL length sane. */
 const MAX_COMP_MARKERS = 15;
 
+/** Comp pin colour — dark slate for legible white numerals on the colour base. */
+const COMP_PIN_COLOR = '5b6573';
+
 export interface LatLng {
   lat: number;
   lng: number;
 }
+
+/** A comp marker: coordinates plus an optional 1–2 char label (its legend number). */
+export type MapComp = LatLng & { label?: string };
 
 /**
  * Build an interactive Google Maps URL centred on the subject coordinates.
@@ -28,10 +34,12 @@ export function interactiveMapHref(subject: LatLng): string {
  * Fetch a Mapbox Static Images PNG auto-fit to the subject + comp markers and
  * return it as a `data:image/png;base64,…` string, or `null` on any error.
  *
- * @param subject  Subject-property coordinates (navy pin).
- * @param comps    Selected comp coordinates (grey pins); capped at MAX_COMP_MARKERS.
+ * @param subject  Subject-property coordinates (navy home pin).
+ * @param comps    Selected comp coordinates; capped at MAX_COMP_MARKERS. When a
+ *                 `label` is given the pin is numbered (medium) to key into the
+ *                 report's price legend; otherwise it's a small unlabelled pin.
  */
-export async function staticMapDataUrl(subject: LatLng, comps: LatLng[]): Promise<string | null> {
+export async function staticMapDataUrl(subject: LatLng, comps: MapComp[]): Promise<string | null> {
   const token = process.env.MAPBOX_TOKEN;
   if (!token) {
     logger.warn('staticMapDataUrl: MAPBOX_TOKEN not set — skipping map');
@@ -41,10 +49,15 @@ export async function staticMapDataUrl(subject: LatLng, comps: LatLng[]): Promis
   // Subject marker: large navy (#1F3864) pin with a "home" glyph → stands out.
   const subjectMarker = `pin-l-home+1f3864(${subject.lng},${subject.lat})`;
 
-  // Comp markers: small grey #888888, capped to MAX_COMP_MARKERS
+  // Comp markers: numbered medium pins (so each dot is annotated and keys into
+  // the price legend); fall back to a small unlabelled pin when no label.
   const compMarkers = comps
     .slice(0, MAX_COMP_MARKERS)
-    .map((c) => `pin-s+888888(${c.lng},${c.lat})`);
+    .map((c) =>
+      c.label
+        ? `pin-m-${encodeURIComponent(c.label)}+${COMP_PIN_COLOR}(${c.lng},${c.lat})`
+        : `pin-s+${COMP_PIN_COLOR}(${c.lng},${c.lat})`,
+    );
 
   const overlays = [subjectMarker, ...compMarkers].join(',');
 

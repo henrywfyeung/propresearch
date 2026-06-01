@@ -52,14 +52,24 @@ describe('staticMapDataUrl', () => {
     expect(url).not.toContain('light-v11');
   });
 
-  it('builds a URL containing grey comp markers (888888)', async () => {
+  it('uses small slate comp markers when unlabelled', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
-    expect(url).toContain('pin-s+888888');
+    expect(url).toContain('pin-s+5b6573');
     for (const c of COMPS) {
       expect(url).toContain(`${c.lng},${c.lat}`);
     }
+  });
+
+  it('uses numbered medium pins when comps carry labels (keys the legend)', async () => {
+    mockFetchOk();
+    const labelled = COMPS.map((c, i) => ({ ...c, label: String(i + 1) }));
+    await staticMapDataUrl(SUBJECT, labelled);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).toContain('pin-m-1+5b6573');
+    expect(url).toContain('pin-m-2+5b6573');
+    expect(url).not.toContain('pin-s+5b6573'); // labelled → medium, not small
   });
 
   it('includes "auto" for auto-fit viewport', async () => {
@@ -107,12 +117,13 @@ describe('staticMapDataUrl', () => {
     const manyComps = Array.from({ length: 20 }, (_, i) => ({
       lat: -33.82 + i * 0.001,
       lng: 151.24 + i * 0.001,
+      label: String(i + 1),
     }));
     await staticMapDataUrl(SUBJECT, manyComps);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
-    // Count grey pin occurrences
-    const greyPins = (url.match(/pin-s\+888888/g) ?? []).length;
-    expect(greyPins).toBe(15);
+    // Count numbered comp pin occurrences
+    const compPins = (url.match(/pin-m-\d+\+5b6573/g) ?? []).length;
+    expect(compPins).toBe(15);
   });
 
   it('still returns a result when comps array is empty (subject-only map)', async () => {
@@ -121,7 +132,7 @@ describe('staticMapDataUrl', () => {
     expect(result).toMatch(/^data:image\/png;base64,/);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
     expect(url).toContain('pin-l-home+1f3864');
-    expect(url).not.toContain('pin-s+888888');
+    expect(url).not.toContain('5b6573');
   });
 });
 
