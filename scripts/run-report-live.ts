@@ -12,9 +12,14 @@ import process from 'node:process';
 
 process.loadEnvFile('.env.local');
 
+// Photos are user-supplied (R55): pass listing/floor-plan image URLs via the
+// PHOTOS env var (comma-separated) to exercise Node 04a's visual inspection.
 const SUBJECT = {
   attrs: { beds: 4, baths: 2, parking: 2, landArea: 600, buildingArea: null, propertyType: 'House' },
-  photos: [] as string[],
+  photos: (process.env.PHOTOS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
 };
 
 async function main() {
