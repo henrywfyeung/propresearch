@@ -30,7 +30,15 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
       label: String(i + 1),
     }));
 
-    data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, mapComps);
+    // Nearest schools as green markers (state.schools is sorted nearest-first;
+    // staticMap caps the count).
+    const schoolMarkers = (state.schools ?? []).map((s) => ({ lat: s.lat, lng: s.lng }));
+
+    data.staticMapDataUrl = await staticMapDataUrl(
+      { lat: addr.lat, lng: addr.lng },
+      mapComps,
+      schoolMarkers,
+    );
   }
 
   // Download listing photos + floor plans as base64 data URLs so Puppeteer doesn't

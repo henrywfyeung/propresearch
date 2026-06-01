@@ -11,6 +11,7 @@
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { selectedMapComps } from '@/report/mapComps';
 import { formatValue, renderClaim } from '@/report/renderClaim';
+import type { NearbyFacility } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { SubjectVision } from '@/schemas/vision';
@@ -42,6 +43,8 @@ export interface ReportData {
   recentDAs: RecentDA[];
   suburbStats: SuburbStats | null;
   demographics: SuburbDemographics | null;
+  /** Nearby schools + early-education facilities (Geoscience Australia). */
+  schools: NearbyFacility[];
   prose: ReportProse;
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
@@ -121,6 +124,14 @@ export const reportStyles = `
   .da-row .da-date { font-size: 8.5pt; color: var(--muted); min-width: 72px; }
   .da-row .da-desc { font-size: 9pt; flex: 1; }
   .da-row.da-unavailable .da-desc { color: var(--muted); font-style: italic; }
+  .schools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; margin: 0 0 6px; }
+  .school-group { break-inside: avoid; margin-bottom: 5px; }
+  .school-group-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--accent); margin: 4px 0 2px; }
+  .school-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-size: 8.5pt; padding: 1px 0; }
+  .school-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .school-dist { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .da-overflow { font-size: 8.5pt; color: var(--muted); padding: 5px 0 0; }
   .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 4px 0 10px; }
   .stats-grid .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -435,6 +446,63 @@ function renderSuburbMarket(
   return h('section', { key: 'market' }, ...children);
 }
 
+// GA facility names are ALL-CAPS with duplicated " - " campus segments; tidy them.
+function cleanFacilityName(raw: string): string {
+  const segs = raw.split(/\s+-\s+/).map((s) => s.trim());
+  const deduped = segs.filter((s, i) => segs.indexOf(s) === i);
+  return deduped
+    .map((s) => s.toLowerCase().replace(/\b([a-z])/g, (_m, c: string) => c.toUpperCase()))
+    .join(' – ');
+}
+
+const SCHOOL_GROUPS: { type: NearbyFacility['type']; label: string; cap: number }[] = [
+  { type: 'primary', label: 'Primary', cap: 4 },
+  { type: 'secondary', label: 'Secondary', cap: 4 },
+  { type: 'combined', label: 'Combined (P–12)', cap: 3 },
+  { type: 'early-education', label: 'Early education', cap: 4 },
+  { type: 'school', label: 'Other schools', cap: 3 },
+];
+
+/**
+ * "Schools & early education" section — nearest facilities grouped by type with
+ * straight-line distance. Returns null when no facilities are available.
+ */
+function renderSchools(schools: NearbyFacility[]): ReactElement | null {
+  if (!schools.length) return null;
+
+  const groups = SCHOOL_GROUPS.flatMap(({ type, label, cap }) => {
+    const items = schools.filter((s) => s.type === type).slice(0, cap);
+    if (!items.length) return [];
+    return [
+      h(
+        'div',
+        { key: type, className: 'school-group' },
+        h('div', { className: 'school-group-label' }, label),
+        ...items.map((s, i) =>
+          h(
+            'div',
+            { key: `${type}-${i}`, className: 'school-row' },
+            h('span', { className: 'school-name' }, cleanFacilityName(s.name)),
+            h('span', { className: 'school-dist num' }, formatValue(s.distanceM, 'distance-m')),
+          ),
+        ),
+      ),
+    ];
+  });
+
+  return h(
+    'section',
+    { key: 'schools' },
+    h('h2', null, 'Schools & early education'),
+    h('div', { className: 'schools-grid' }, ...groups),
+    h(
+      'p',
+      { className: 'src' },
+      'Source: Geoscience Australia (Education Facilities), straight-line distance. Early-education coverage is indicative — check the ACECQA national register for the complete childcare list.',
+    ),
+  );
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const {
     subject,
@@ -445,6 +513,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     recentDAs,
     suburbStats,
     demographics,
+    schools,
     staticMapDataUrl: mapDataUrl,
     mapHref,
     photos,
@@ -587,6 +656,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   );
 
   const marketSection = renderSuburbMarket(suburbStats, prose.market, demographics);
+  const schoolsSection = renderSchools(schools);
 
   const riskSection = h(
     'section',
@@ -687,6 +757,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
             legendComps.length > 0
               ? 'Navy home pin marks the subject property; numbered pins mark comparable sales (keyed below, with sale prices).'
               : 'Navy home pin marks the subject property.',
+            schools.length > 0 ? ' Green pins mark nearby schools.' : '',
             mapHref ? ' Click the map to open it interactively (satellite, Street View, directions).' : '',
           ),
           mapLegend,
@@ -706,6 +777,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     valuation,
     comparablesSection,
     marketSection,
+    schoolsSection,
     riskSection,
     planningSection,
     footer,

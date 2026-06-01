@@ -23,6 +23,7 @@ const NODE_ORDER = [
   'fetchRisks',
   'fetchPlanning',
   'fetchDemographics',
+  'fetchSchools',
   'reasonAndSelect',
   'triangulate',
   'compose',

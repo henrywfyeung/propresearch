@@ -14,6 +14,7 @@ import { fetchRisks } from '@/agents/nodes/09_fetchRisks';
 import { compose } from '@/agents/nodes/10_compose';
 import { fetchDemographics } from '@/agents/nodes/12_fetchDemographics';
 import { render } from '@/agents/nodes/13_render';
+import { fetchSchools } from '@/agents/nodes/14_fetchSchools';
 import { runWithReportContext } from '@/agents/reportContext';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
@@ -32,6 +33,7 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('fetchPlanning', fetchPlanning)
   .addNode('fetchRisks', fetchRisks)
   .addNode('fetchDemographics', fetchDemographics)
+  .addNode('fetchSchools', fetchSchools)
   .addNode('reasonAndSelect', reasonAndSelect)
   .addNode('triangulate', triangulate)
   .addNode('compose', compose)
@@ -43,11 +45,20 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge('resolveAddress', 'fetchRisks')
   .addEdge('resolveAddress', 'fetchPlanning')
   .addEdge('resolveAddress', 'fetchDemographics')
+  .addEdge('resolveAddress', 'fetchSchools')
   .addEdge('fetchCandidateComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  // compose waits for triangulate, visionSubject, fetchRisks, fetchPlanning, AND fetchDemographics (5-way join)
+  // compose waits for triangulate, visionSubject, fetchRisks, fetchPlanning,
+  // fetchDemographics AND fetchSchools (6-way join)
   .addEdge(
-    ['triangulate', 'visionSubject', 'fetchRisks', 'fetchPlanning', 'fetchDemographics'],
+    [
+      'triangulate',
+      'visionSubject',
+      'fetchRisks',
+      'fetchPlanning',
+      'fetchDemographics',
+      'fetchSchools',
+    ],
     'compose',
   )
   .addEdge('compose', 'render')

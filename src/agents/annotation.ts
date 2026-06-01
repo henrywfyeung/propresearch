@@ -4,6 +4,7 @@
 
 import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
+import type { NearbyFacility } from '@/tools/schools/ga';
 import type {
   Comparable,
   MarketContext,
@@ -45,6 +46,10 @@ export const GraphAnnotation = Annotation.Root({
   demographics: Annotation<SuburbDemographics | null>({
     reducer: (_c, u) => u,
     default: () => null,
+  }),
+  schools: Annotation<NearbyFacility[]>({
+    reducer: (_c, u) => u,
+    default: () => [],
   }),
   prose: Annotation<ReportProse>({
     reducer: (cur, inc) => ({ ...cur, ...inc }),

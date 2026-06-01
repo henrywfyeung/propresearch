@@ -1,6 +1,7 @@
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
 import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
+import type { NearbyFacility } from '@/tools/schools/ga';
 import type { SubjectVision } from '@/schemas/vision';
 import { describe, expect, it } from 'vitest';
 
@@ -29,6 +30,7 @@ const data: ReportData = {
   recentDAs: [],
   suburbStats: null,
   demographics: null,
+  schools: [],
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -685,5 +687,37 @@ describe('Map legend rendering', () => {
     const html = renderReportHtml({ ...data, staticMapDataUrl: MAP, comparables: [] });
     expect(html).not.toContain('class="map-legend"');
     expect(html).not.toContain('keyed below');
+  });
+});
+
+describe('Schools & early education rendering', () => {
+  const fac = (name: string, type: NearbyFacility['type'], distanceM: number): NearbyFacility => ({
+    name,
+    type,
+    lat: -37.82,
+    lng: 144.99,
+    distanceM,
+  });
+
+  it('renders schools grouped by type with cleaned names + source caveat', () => {
+    const schools = [
+      fac('RICHMOND PRIMARY SCHOOL', 'primary', 700),
+      fac('RICHMOND HIGH SCHOOL - GRIFFITHS STREET CAMPUS', 'secondary', 1050),
+      fac('LITTLE STARS EARLY LEARNING CENTRE', 'early-education', 300),
+    ];
+    const html = renderReportHtml({ ...data, schools });
+    expect(html).toContain('Schools &amp; early education'); // heading (& escaped)
+    expect(html).toContain('Primary');
+    expect(html).toContain('Secondary');
+    expect(html).toContain('Early education');
+    expect(html).toContain('Richmond Primary School'); // ALL-CAPS → title-cased
+    expect(html).toContain('Richmond High School – Griffiths Street Campus'); // dash segments joined
+    expect(html).toContain('Geoscience Australia');
+    expect(html).toContain('ACECQA'); // childcare-completeness caveat
+  });
+
+  it('omits the section entirely when there are no schools', () => {
+    const html = renderReportHtml({ ...data, schools: [] });
+    expect(html).not.toContain('Schools &amp; early education');
   });
 });

@@ -12,6 +12,11 @@ const MAX_COMP_MARKERS = 15;
 /** Comp pin colour — dark slate for legible white numerals on the colour base. */
 const COMP_PIN_COLOR = '5b6573';
 
+/** Max school markers on the map; nearest-first, kept small so it stays readable. */
+const MAX_SCHOOL_MARKERS = 6;
+/** School pin colour — green, distinct from the navy subject + slate comps. */
+const SCHOOL_PIN_COLOR = '2e8b57';
+
 export interface LatLng {
   lat: number;
   lng: number;
@@ -38,8 +43,14 @@ export function interactiveMapHref(subject: LatLng): string {
  * @param comps    Selected comp coordinates; capped at MAX_COMP_MARKERS. When a
  *                 `label` is given the pin is numbered (medium) to key into the
  *                 report's price legend; otherwise it's a small unlabelled pin.
+ * @param schools  Nearby school/early-ed coordinates (green school-glyph pins);
+ *                 capped at MAX_SCHOOL_MARKERS to keep the map readable.
  */
-export async function staticMapDataUrl(subject: LatLng, comps: MapComp[]): Promise<string | null> {
+export async function staticMapDataUrl(
+  subject: LatLng,
+  comps: MapComp[],
+  schools: LatLng[] = [],
+): Promise<string | null> {
   const token = process.env.MAPBOX_TOKEN;
   if (!token) {
     logger.warn('staticMapDataUrl: MAPBOX_TOKEN not set — skipping map');
@@ -59,7 +70,13 @@ export async function staticMapDataUrl(subject: LatLng, comps: MapComp[]): Promi
         : `pin-s+${COMP_PIN_COLOR}(${c.lng},${c.lat})`,
     );
 
-  const overlays = [subjectMarker, ...compMarkers].join(',');
+  // School markers: small green pins with a "school" glyph (distinct from
+  // subject + comps); nearest few only, so they don't crowd the map.
+  const schoolMarkers = schools
+    .slice(0, MAX_SCHOOL_MARKERS)
+    .map((s) => `pin-s-school+${SCHOOL_PIN_COLOR}(${s.lng},${s.lat})`);
+
+  const overlays = [subjectMarker, ...compMarkers, ...schoolMarkers].join(',');
 
   // streets-v12 → full-colour base map (roads, parks, water, labels) rather than
   // the muted grey light-v11. auto → Mapbox auto-fits the viewport to all markers;

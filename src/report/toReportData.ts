@@ -31,6 +31,7 @@ export function toReportData(state: GraphState): ReportData | null {
     recentDAs: state.market?.recentDAs ?? [],
     suburbStats: computeSuburbStats(state.comparables),
     demographics: state.demographics ?? null,
+    schools: state.schools ?? [],
     prose: state.prose,
     generatedAt: new Date().toISOString(),
     // Populated by the render node after fetching the static map.

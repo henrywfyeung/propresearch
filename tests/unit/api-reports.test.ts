@@ -216,11 +216,11 @@ describe('GET /api/reports/[id]', () => {
     expect(json.percentage).toBe(0);
   });
 
-  it('percentage for resolveAddress (index 0) is round(1/10*100) = 10', async () => {
+  it('percentage for resolveAddress (index 0) is round(1/11*100) = 9', async () => {
     mockGetReportStatus.mockResolvedValue({ ...BASE_ROW, currentNode: 'resolveAddress' });
     const res = await GET(new Request('http://localhost'), makeGetParams('rid-1'));
     const json = await res.json();
-    expect(json.percentage).toBe(Math.round((1 / 10) * 100)); // 10 (10-node order)
+    expect(json.percentage).toBe(Math.round((1 / 11) * 100)); // 9 (11-node order)
   });
 
   it('percentage for render (index 9 = last) is 100', async () => {
@@ -234,11 +234,11 @@ describe('GET /api/reports/[id]', () => {
     expect(json.percentage).toBe(100);
   });
 
-  it('percentage for compose (index 8) is round(9/10*100) = 90', async () => {
+  it('percentage for compose (index 9) is round(10/11*100) = 91', async () => {
     mockGetReportStatus.mockResolvedValue({ ...BASE_ROW, currentNode: 'compose' });
     const res = await GET(new Request('http://localhost'), makeGetParams('rid-1'));
     const json = await res.json();
-    expect(json.percentage).toBe(Math.round((9 / 10) * 100)); // 90 (10-node order)
+    expect(json.percentage).toBe(Math.round((10 / 11) * 100)); // 91 (11-node order)
   });
 
   it('percentage is 0 for an unknown currentNode', async () => {

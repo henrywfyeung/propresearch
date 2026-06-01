@@ -72,6 +72,23 @@ describe('staticMapDataUrl', () => {
     expect(url).not.toContain('pin-s+5b6573'); // labelled → medium, not small
   });
 
+  it('adds green school-glyph markers when schools are provided', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS, [
+      { lat: -33.83, lng: 151.25 },
+      { lat: -33.81, lng: 151.23 },
+    ]);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).toContain('pin-s-school+2e8b57');
+  });
+
+  it('omits school markers when none are provided', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('school');
+  });
+
   it('includes "auto" for auto-fit viewport', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS);
