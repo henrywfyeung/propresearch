@@ -25,6 +25,8 @@ export const SubjectVisionSchema = z.object({
   staging: StagingSchema,
   presentationFactors: cappedStringArray(6),
   redFlags: cappedStringArray(6),
+  /** Human-readable visual-inspection comment. Inspector-style, conservative. */
+  comment: z.string().min(40),
 });
 export type SubjectVision = z.infer<typeof SubjectVisionSchema>;
 

@@ -1,9 +1,14 @@
 import type { z } from 'zod';
 
+/** A single part within a multimodal message content array. */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 /** A chat message in LangChain's role/content shape. */
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentPart[];
 }
 
 export interface StructuredCallOpts<T> {

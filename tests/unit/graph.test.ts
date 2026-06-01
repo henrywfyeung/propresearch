@@ -16,8 +16,8 @@ import {
 vi.mock('@/tools/llm/structuredCall', () => ({ callWithFallback: vi.fn() }));
 const mockLlm = vi.mocked(callWithFallback);
 
-// fetchRisks, fetchPlanning, and fetchDemographics run in parallel with fetchCandidateComps;
-// mock them so the graph test doesn't need NSW ArcGIS / OnlineDA / ABS endpoints.
+// fetchRisks, fetchPlanning, fetchDemographics, and visionSubject run in parallel
+// with fetchCandidateComps; mock them so the graph test doesn't need external endpoints.
 vi.mock('@/agents/nodes/09_fetchRisks', () => ({
   fetchRisks: vi.fn().mockResolvedValue({ risks: [] }),
 }));
@@ -26,6 +26,9 @@ vi.mock('@/agents/nodes/05_planningAndNews', () => ({
 }));
 vi.mock('@/agents/nodes/12_fetchDemographics', () => ({
   fetchDemographics: vi.fn().mockResolvedValue({ demographics: null }),
+}));
+vi.mock('@/agents/nodes/04a_visionAnalyseSubject', () => ({
+  visionAnalyseSubject: vi.fn().mockResolvedValue({}),
 }));
 
 import { uploadPdf } from '@/tools/storage/s3';

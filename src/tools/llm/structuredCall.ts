@@ -15,6 +15,7 @@ import { llmCalls } from '@/db/schema';
 import { LlmProvidersUnavailableError } from '@/lib/errors';
 import { logger } from '@/lib/observability/logger';
 import { ChatAnthropic } from '@langchain/anthropic';
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { sql } from 'drizzle-orm';
 import OpenAI from 'openai';
@@ -45,9 +46,28 @@ export function __setModelRunner(runner?: ModelRunner): void {
   modelRunner = runner ?? defaultModelRunner;
 }
 
-function toLangchainMessages(messages: LlmMessage[]): [string, string][] {
-  // LangChain accepts [role, content] tuples; map assistant→ai.
-  return messages.map((m) => [m.role === 'assistant' ? 'ai' : m.role, m.content]);
+function toLangchainMessages(
+  messages: LlmMessage[],
+): ([string, string] | HumanMessage | SystemMessage | AIMessage)[] {
+  // LangChain accepts [role, content] tuples for plain text. For multimodal
+  // messages (array content) the tuple form rejects arrays, so we construct
+  // message objects directly from @langchain/core/messages instead.
+  return messages.map((m) => {
+    if (Array.isArray(m.content)) {
+      // Pass the ContentPart[] directly — LangChain's MessageContentComplex[]
+      // accepts { type: 'text' } and { type: 'image_url' } parts natively.
+      switch (m.role) {
+        case 'system':
+          return new SystemMessage({ content: m.content });
+        case 'assistant':
+          return new AIMessage({ content: m.content });
+        default:
+          return new HumanMessage({ content: m.content });
+      }
+    }
+    // String content: original tuple path (assistant → 'ai').
+    return [m.role === 'assistant' ? 'ai' : m.role, m.content] as [string, string];
+  });
 }
 
 // --- OpenAI reasoning via the Responses API (background mode) ----------------
@@ -84,8 +104,9 @@ async function runOpenAiReasoning(
   const client = getOpenAi();
   const input = opts.messages.map((m) => ({
     // 'developer' is the reasoning-model equivalent of a system message.
+    // Reasoning calls are always text-only; content is always a string here.
     role: m.role === 'system' ? ('developer' as const) : m.role,
-    content: m.content,
+    content: m.content as string,
   }));
   let resp = await client.responses.create({
     model,

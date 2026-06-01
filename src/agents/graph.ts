@@ -6,6 +6,7 @@
 import { GraphAnnotation, type GraphState } from '@/agents/annotation';
 import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
+import { visionAnalyseSubject } from '@/agents/nodes/04a_visionAnalyseSubject';
 import { fetchPlanning } from '@/agents/nodes/05_planningAndNews';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
@@ -19,6 +20,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 // Graph topology (spec §5 / CLAUDE.md §6.2):
 //
 //   START → resolveAddress ─┬→ fetchCandidateComps → reasonAndSelect → triangulate ─┐
+//                           ├→ visionSubject ────────────────────────────────────────┤
 //                           ├→ fetchRisks ──────────────────────────────────────────┤
 //                           ├→ fetchPlanning ────────────────────────────────────────┤
 //                           └→ fetchDemographics ─────────────────────────────────────┴→ compose → render → END
@@ -26,6 +28,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
+  .addNode('visionSubject', visionAnalyseSubject)
   .addNode('fetchPlanning', fetchPlanning)
   .addNode('fetchRisks', fetchRisks)
   .addNode('fetchDemographics', fetchDemographics)
@@ -36,13 +39,17 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge(START, 'resolveAddress')
   // parallel branches from resolveAddress
   .addEdge('resolveAddress', 'fetchCandidateComps')
+  .addEdge('resolveAddress', 'visionSubject')
   .addEdge('resolveAddress', 'fetchRisks')
   .addEdge('resolveAddress', 'fetchPlanning')
   .addEdge('resolveAddress', 'fetchDemographics')
   .addEdge('fetchCandidateComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  // compose waits for triangulate, fetchRisks, fetchPlanning, AND fetchDemographics (4-way join)
-  .addEdge(['triangulate', 'fetchRisks', 'fetchPlanning', 'fetchDemographics'], 'compose')
+  // compose waits for triangulate, visionSubject, fetchRisks, fetchPlanning, AND fetchDemographics (5-way join)
+  .addEdge(
+    ['triangulate', 'visionSubject', 'fetchRisks', 'fetchPlanning', 'fetchDemographics'],
+    'compose',
+  )
   .addEdge('compose', 'render')
   .addEdge('render', END)
   .compile();
