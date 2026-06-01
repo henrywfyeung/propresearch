@@ -3,6 +3,7 @@
 import type { GraphState } from '@/agents/annotation';
 import type { ReportData } from '@/report/template/ReportDocument';
 import { computeSuburbStats } from '@/tools/market/suburbStats';
+import { interactiveMapHref } from '@/tools/mapbox/staticMap';
 
 export function toReportData(state: GraphState): ReportData | null {
   const a = state.resolvedAddress;
@@ -34,6 +35,9 @@ export function toReportData(state: GraphState): ReportData | null {
     generatedAt: new Date().toISOString(),
     // Populated by the render node after fetching the static map.
     staticMapDataUrl: null,
+    // Interactive Google Maps link the PDF map image points at (PDF can't host a
+    // live map, but the static image becomes a clickable link annotation).
+    mapHref: interactiveMapHref({ lat: a.lat, lng: a.lng }),
     // photos + floorplans are initialised empty here; the render node overrides
     // them with downloaded base64 data URLs (toReportData is sync, can't fetch).
     photos: [],

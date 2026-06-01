@@ -15,6 +15,16 @@ export interface LatLng {
 }
 
 /**
+ * Build an interactive Google Maps URL centred on the subject coordinates.
+ * Used to make the otherwise-static PDF map image a clickable link (PDF viewers
+ * can't run a live map, but they honour link annotations) — opening it gives the
+ * reader satellite, Street View, zoom and directions at the exact property.
+ */
+export function interactiveMapHref(subject: LatLng): string {
+  return `https://www.google.com/maps/search/?api=1&query=${subject.lat},${subject.lng}`;
+}
+
+/**
  * Fetch a Mapbox Static Images PNG auto-fit to the subject + comp markers and
  * return it as a `data:image/png;base64,…` string, or `null` on any error.
  *
@@ -28,19 +38,21 @@ export async function staticMapDataUrl(subject: LatLng, comps: LatLng[]): Promis
     return null;
   }
 
-  // Subject marker: navy accent #1F3864 → URL-encode the hex (no #)
-  const subjectMarker = `pin-s+1f3864(${subject.lng},${subject.lat})`;
+  // Subject marker: large navy (#1F3864) pin with a "home" glyph → stands out.
+  const subjectMarker = `pin-l-home+1f3864(${subject.lng},${subject.lat})`;
 
-  // Comp markers: grey #888888, capped to MAX_COMP_MARKERS
+  // Comp markers: small grey #888888, capped to MAX_COMP_MARKERS
   const compMarkers = comps
     .slice(0, MAX_COMP_MARKERS)
     .map((c) => `pin-s+888888(${c.lng},${c.lat})`);
 
   const overlays = [subjectMarker, ...compMarkers].join(',');
 
-  // auto → Mapbox auto-fits the viewport to all markers; padding avoids edge clipping.
+  // streets-v12 → full-colour base map (roads, parks, water, labels) rather than
+  // the muted grey light-v11. auto → Mapbox auto-fits the viewport to all markers;
+  // padding avoids edge clipping.
   const url = new URL(
-    `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${overlays}/auto/640x360@2x`,
+    `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${overlays}/auto/640x360@2x`,
   );
   url.searchParams.set('access_token', token);
   url.searchParams.set('padding', '40');

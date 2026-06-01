@@ -1,5 +1,5 @@
 // tests/unit/staticMap.test.ts
-import { staticMapDataUrl } from '@/tools/mapbox/staticMap';
+import { interactiveMapHref, staticMapDataUrl } from '@/tools/mapbox/staticMap';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SUBJECT = { lat: -33.82, lng: 151.24 };
@@ -36,12 +36,20 @@ afterEach(() => {
 });
 
 describe('staticMapDataUrl', () => {
-  it('builds a URL containing the navy subject marker (1f3864)', async () => {
+  it('builds a URL containing the large navy home subject marker (1f3864)', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
-    expect(url).toContain('pin-s+1f3864');
+    expect(url).toContain('pin-l-home+1f3864');
     expect(url).toContain(`${SUBJECT.lng},${SUBJECT.lat}`);
+  });
+
+  it('uses the full-colour streets-v12 base style', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).toContain('/styles/v1/mapbox/streets-v12/');
+    expect(url).not.toContain('light-v11');
   });
 
   it('builds a URL containing grey comp markers (888888)', async () => {
@@ -112,7 +120,19 @@ describe('staticMapDataUrl', () => {
     const result = await staticMapDataUrl(SUBJECT, []);
     expect(result).toMatch(/^data:image\/png;base64,/);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
-    expect(url).toContain('pin-s+1f3864');
+    expect(url).toContain('pin-l-home+1f3864');
     expect(url).not.toContain('pin-s+888888');
+  });
+});
+
+describe('interactiveMapHref', () => {
+  it('builds a Google Maps URL centred on the subject coordinates', () => {
+    const href = interactiveMapHref({ lat: -33.8369, lng: 151.2345 });
+    expect(href).toBe('https://www.google.com/maps/search/?api=1&query=-33.8369,151.2345');
+  });
+
+  it('does not require a Mapbox token (pure URL builder)', () => {
+    process.env.MAPBOX_TOKEN = '';
+    expect(() => interactiveMapHref({ lat: 0, lng: 0 })).not.toThrow();
   });
 });

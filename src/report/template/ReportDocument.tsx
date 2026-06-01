@@ -45,6 +45,8 @@ export interface ReportData {
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
   staticMapDataUrl: string | null;
+  /** Interactive map URL the static map image links to, or null. */
+  mapHref: string | null;
   /** Listing photo URLs (base64 data URLs after render-node download). */
   photos: string[];
   /** Floor plan image URLs (base64 data URLs after render-node download). */
@@ -125,6 +127,7 @@ export const reportStyles = `
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
   .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
+  .location-map-link { display: block; text-decoration: none; border: 0; }
   .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 4px; }
   .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 12px; }
   .photo-grid img { width: 100%; height: 52mm; object-fit: cover; border-radius: 3px; border: 1px solid var(--line); display: block; }
@@ -431,6 +434,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     suburbStats,
     demographics,
     staticMapDataUrl: mapDataUrl,
+    mapHref,
     photos,
     floorplans,
     subjectVision,
@@ -606,22 +610,39 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     h('span', { className: 'num' }, formatValue(data.generatedAt, 'date')),
   );
 
-  // Location map section — only rendered when the data URL is present.
+  // Location map section — only rendered when the data URL is present. When an
+  // interactive map URL is available, the image is wrapped in a link annotation
+  // (Chromium's print-to-PDF turns <a href> into a clickable PDF link) so the
+  // reader can open a live, zoomable map at the property.
+  const mapImage = h('img', {
+    src: mapDataUrl ?? undefined,
+    alt: 'Location map showing subject property and comparable sales',
+    className: 'location-map',
+  });
   const locationSection =
     mapDataUrl != null
       ? h(
           'section',
           { key: 'location' },
           h('h2', null, 'Location'),
-          h('img', {
-            src: mapDataUrl,
-            alt: 'Static location map showing subject property and comparable sales',
-            className: 'location-map',
-          }),
+          mapHref
+            ? h(
+                'a',
+                {
+                  href: mapHref,
+                  target: '_blank',
+                  rel: 'noreferrer',
+                  className: 'location-map-link',
+                },
+                mapImage,
+              )
+            : mapImage,
           h(
             'p',
             { className: 'location-map-caption' },
-            'Navy pin — subject property. Grey pins — selected comparable sales.',
+            mapHref
+              ? 'Navy pin — subject property. Grey pins — selected comparable sales. Click the map to open it interactively (satellite, Street View, directions).'
+              : 'Navy pin — subject property. Grey pins — selected comparable sales.',
           ),
         )
       : null;

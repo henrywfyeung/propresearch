@@ -40,6 +40,7 @@ vi.mock('@/tools/storage/s3', () => ({
 }));
 vi.mock('@/tools/mapbox/staticMap', () => ({
   staticMapDataUrl: vi.fn().mockResolvedValue(null),
+  interactiveMapHref: vi.fn().mockReturnValue('https://www.google.com/maps/search/?api=1&query=0,0'),
 }));
 
 const server = setupServer();

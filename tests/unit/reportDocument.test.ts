@@ -49,6 +49,7 @@ const data: ReportData = {
   },
   generatedAt: '2026-05-31T00:00:00.000Z',
   staticMapDataUrl: null,
+  mapHref: null,
   photos: [],
   floorplans: [],
   subjectVision: null,
@@ -404,6 +405,26 @@ describe('Location map rendering', () => {
     const html = renderReportHtml({ ...data, staticMapDataUrl: null });
     // Should not contain any data URL img
     expect(html).not.toContain('data:image/png;base64,');
+  });
+
+  it('wraps the map image in a link to the interactive map when mapHref is set', () => {
+    const href = 'https://www.google.com/maps/search/?api=1&query=-33.83,151.23';
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP_DATA_URL, mapHref: href });
+    // & is HTML-escaped to &amp; in attribute values — assert on the un-escaped prefix.
+    expect(html).toContain('https://www.google.com/maps/search/?api=1');
+    expect(html).toContain('query=-33.83,151.23');
+    // the rendered link wrapper (not the CSS rule) opens before the map image
+    const linkIdx = html.indexOf('class="location-map-link"');
+    const imgIdx = html.indexOf(MAP_DATA_URL);
+    expect(linkIdx).toBeGreaterThan(-1);
+    expect(linkIdx).toBeLessThan(imgIdx);
+  });
+
+  it('renders the map image without an anchor when mapHref is null', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP_DATA_URL, mapHref: null });
+    expect(html).toContain(MAP_DATA_URL);
+    expect(html).not.toContain('class="location-map-link"');
+    expect(html).not.toContain('google.com/maps');
   });
 
   it('location section appears between subject and valuation when present', () => {
