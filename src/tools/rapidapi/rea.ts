@@ -11,11 +11,22 @@ export const REA_HOST = process.env.RAPIDAPI_REA_HOST ?? 'realty-base-au.p.rapid
 // --- auto-complete ------------------------------------------------------
 const ReaAutoCompleteItem = z.object({
   locationId: z.string(), // e.g. "suburb:Mosman, NSW 2088"
-  type: z.string().optional(),
+  type: z.string().nullish(),
+  id: z.string().nullish(), // listing id, e.g. "151106864"
   display: z.object({ text: z.string(), subtext: z.string().optional() }).optional(),
+  // For type='suburb'/'address' the source is { name, postcode, state }.
+  // For type='listing' the source is { url, image, channel }.
+  // We capture what we need from both shapes (all nullish so neither shape rejects).
   source: z
-    .object({ name: z.string(), postcode: z.string().optional(), state: z.string().optional() })
-    .optional(),
+    .object({
+      name: z.string().nullish(),
+      postcode: z.string().nullish(),
+      state: z.string().nullish(),
+      url: z.string().nullish(), // canonical REA listing URL
+      image: z.string().nullish(), // thumbnail template URL
+      channel: z.string().nullish(),
+    })
+    .nullish(),
 });
 const ReaAutoCompleteResponse = z.object({
   data: z.array(ReaAutoCompleteItem),
@@ -64,8 +75,12 @@ export const ReaSoldListingSchema = z.object({
       location: z.object({ latitude: z.number(), longitude: z.number() }).nullish(),
     })
     .nullish(),
-  images: z.array(z.object({ server: z.string(), uri: z.string() })).nullish(),
-  mainImage: z.object({ server: z.string(), uri: z.string() }).nullish(),
+  images: z
+    .array(z.object({ server: z.string(), uri: z.string(), name: z.string().nullish() }))
+    .nullish(),
+  mainImage: z
+    .object({ server: z.string(), uri: z.string(), name: z.string().nullish() })
+    .nullish(),
 });
 export type ReaSoldListing = z.infer<typeof ReaSoldListingSchema>;
 
@@ -88,6 +103,83 @@ export async function reaSearchSold(locationId: string, page = 1): Promise<ReaSo
   for (const item of res.data) {
     const parsed = ReaSoldListingSchema.safeParse(item);
     if (parsed.success && parsed.data.dateSold) out.push(parsed.data);
+  }
+  return out;
+}
+
+// --- listing images (buy channel, for a listing: locationId) ------------
+
+/**
+ * Build a size-prefixed CDN URL that returns a real full-resolution JPEG.
+ * The bare URL (${server}${uri}) 302-redirects to a placeholder; inserting
+ * the size segment before the hash path serves the actual photo.
+ */
+export function withSize(server: string, uri: string): string {
+  return `${server}/1920x1080-format=jpg${uri}`;
+}
+
+export type ReaImageItem = { server: string; name: string; uri: string };
+
+// Lenient envelope for the listing-detail endpoint. When the locationId is
+// of type 'listing', the API returns data as an object (single listing)
+// rather than an array; we normalise to an array of image items.
+const ReaListingDetailResponse = z.object({
+  status: z.boolean().optional(),
+  data: z.union([
+    // single listing (the common shape for type=listing locationIds)
+    z
+      .object({
+        images: z
+          .array(
+            z
+              .object({
+                server: z.string(),
+                name: z.string(),
+                uri: z.string(),
+              })
+              .passthrough(),
+          )
+          .optional(),
+      })
+      .passthrough(),
+    // array shape (just in case)
+    z.array(z.unknown()),
+  ]),
+});
+
+/**
+ * Fetch the image array for a listing-type locationId (e.g.
+ * "listing:2/25 Mosman Street, Mosman, NSW 2088"). Returns raw image items
+ * including server/name/uri; caller uses withSize() to build full URLs.
+ * Returns [] on any parse failure so callers degrade gracefully.
+ */
+export async function reaListingImages(locationId: string): Promise<ReaImageItem[]> {
+  const res = await rapidApiCall({
+    host: REA_HOST,
+    path: '/properties/search',
+    params: { locationId, channel: 'buy' },
+    schema: ReaListingDetailResponse,
+  });
+
+  // data may be a dict (single listing) or an array — normalise.
+  const listing = Array.isArray(res.data) ? res.data[0] : res.data;
+  if (!listing || Array.isArray(listing)) return [];
+
+  const images = (listing as { images?: unknown }).images;
+  if (!Array.isArray(images)) return [];
+
+  const out: ReaImageItem[] = [];
+  for (const img of images) {
+    if (img && typeof img === 'object' && 'server' in img && 'name' in img && 'uri' in img) {
+      const candidate = img as { server: unknown; name: unknown; uri: unknown };
+      if (
+        typeof candidate.server === 'string' &&
+        typeof candidate.name === 'string' &&
+        typeof candidate.uri === 'string'
+      ) {
+        out.push({ server: candidate.server, name: candidate.name, uri: candidate.uri });
+      }
+    }
   }
   return out;
 }

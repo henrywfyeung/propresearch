@@ -58,8 +58,8 @@ describe('toComparable', () => {
     expect(c?.beds).toBe(1);
     expect(c?.landArea).toBe(787);
     expect(c?.photos).toEqual([
-      'https://i3.au.reastatic.net/a/image.jpg',
-      'https://i3.au.reastatic.net/b/image.jpg',
+      'https://i3.au.reastatic.net/1920x1080-format=jpg/a/image.jpg',
+      'https://i3.au.reastatic.net/1920x1080-format=jpg/b/image.jpg',
     ]);
     expect(c?.distanceM).toBeLessThan(50); // same location
     expect(c?.source.provider).toBe('rea');
