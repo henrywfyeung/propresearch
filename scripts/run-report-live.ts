@@ -37,6 +37,14 @@ async function main() {
   console.log(`\n=== comps === ${state.comparables.length} candidates | ${fv.length} fair-value | ${an.length} anchor`);
   console.log('\n=== value ===');
   console.log(state.triangulation);
+  console.log('\n=== risks ===');
+  for (const r of state.risks ?? [])
+    console.log(`  ${r.category.padEnd(9)} ${r.severity.padEnd(13)}${r.dataAvailable ? '' : ' [unavailable]'} — ${r.description}`);
+  console.log('\n=== suburb market ===');
+  const d = state.demographics;
+  if (d)
+    console.log(`  ${d.sa2Name}: pop ${d.population}, median age ${d.medianAge}, hh income $${d.medianHouseholdIncomeWeekly}/wk, ${d.ownerOccupiedPct}% owner-occupied`);
+  console.log(`  recent DAs ≤500m: ${state.market?.recentDAs?.length ?? 0}`);
   console.log('\n=== PROSE ===');
   for (const [section, blocks] of Object.entries(state.prose ?? {})) {
     console.log(`\n## ${section}`);
