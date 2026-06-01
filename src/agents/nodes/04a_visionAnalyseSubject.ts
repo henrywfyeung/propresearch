@@ -1,17 +1,24 @@
 // src/agents/nodes/04a_visionAnalyseSubject.ts — Node 04a (CLAUDE.md §7.4).
-// GPT-5.4 vision over user-supplied listing photos → structured SubjectVision.
+// GPT-5.4 vision over listing photos → structured SubjectVision.
+//
+// Photo sources (merged, de-duplicated, listing-first):
+//   1. Auto-fetched REA CDN photos + floor plans via fetchListingMedia.
+//   2. User-supplied extras (state.subject.photos), e.g. inspection shots.
 //
 // - No subject → in-band PARTIAL_DATA error (mirrors node 09/12 style).
-// - No photos (subject.photos is empty) → return {} gracefully (vision is optional, §7.17).
+// - photos written to state regardless of whether vision succeeds (so the
+//   render's photo grid shows even if the LLM call fails).
+// - No photos after merge → return early with empty photos + null visionAnalysis.
 // - Up to 8 photos sent as image_url parts in a multimodal HumanMessage.
 // - Calls callWithFallback on the NON-reasoning path (no reasoningEffort).
-// - Any LLM failure is caught and swallowed → return {} (graceful; non-fatal).
+// - Any LLM failure is caught → photos still written, visionAnalysis null (graceful).
 
 import type { GraphState } from '@/agents/annotation';
 import { logger } from '@/lib/observability/logger';
 import { SubjectVisionSchema } from '@/schemas/vision';
 import { callWithFallback } from '@/tools/llm/structuredCall';
 import type { ContentPart, LlmMessage } from '@/tools/llm/types';
+import { fetchListingMedia } from '@/tools/rapidapi/listingMedia';
 
 const MAX_PHOTOS = 8;
 
@@ -32,11 +39,33 @@ export async function visionAnalyseSubject(state: GraphState): Promise<Partial<G
     };
   }
 
-  const { photos } = state.subject;
+  // Determine the lookup address: prefer rawAddress (REA-friendly user input),
+  // fall back to resolvedAddress.normalizedAddress.
+  const lookupAddress =
+    state.rawAddress?.trim() || state.resolvedAddress?.normalizedAddress || null;
 
-  // Nothing to analyse — not an error, just skip
+  // Auto-fetch listing media — swallow all errors (graceful degradation).
+  const media = lookupAddress ? await fetchListingMedia(lookupAddress).catch(() => null) : null;
+
+  // Merge: listing photos first, then floor plans, then user-supplied extras.
+  // De-duplicate by URL so re-runs don't double-up.
+  const photos = [
+    ...new Set([
+      ...(media?.photos ?? []),
+      ...(media?.floorplans ?? []),
+      ...(state.subject.photos ?? []),
+    ]),
+  ];
+
+  // Nothing to show or analyse — return early with photos written (empty array).
   if (photos.length === 0) {
-    return {};
+    return {
+      subject: {
+        ...state.subject,
+        photos: [],
+        visionAnalysis: null,
+      },
+    };
   }
 
   // Build multimodal message: text instruction + one image_url per photo (capped at 8)
@@ -56,23 +85,25 @@ export async function visionAnalyseSubject(state: GraphState): Promise<Partial<G
   // Use || (falsy) so that an empty string env var falls through to the next option.
   const model = process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL_REASONING || '';
 
+  let visionAnalysis = null;
   try {
-    const visionAnalysis = await callWithFallback({
+    visionAnalysis = await callWithFallback({
       model,
       schema: SubjectVisionSchema,
       node: 'visionSubject',
       messages,
       // NO reasoningEffort — vision uses the functionCalling / Chat Completions path
     });
-
-    return {
-      subject: {
-        ...state.subject,
-        visionAnalysis,
-      },
-    };
   } catch (err) {
     logger.warn({ err: String(err) }, 'visionAnalyseSubject: LLM call failed — skipping vision');
-    return {};
   }
+
+  // Always write photos back to state, regardless of vision success.
+  return {
+    subject: {
+      ...state.subject,
+      photos,
+      visionAnalysis,
+    },
+  };
 }
