@@ -1,17 +1,20 @@
 // src/agents/nodes/04a_visionAnalyseSubject.ts — Node 04a (CLAUDE.md §7.4).
 // GPT-5.4 vision over listing photos → structured SubjectVision.
 //
-// Photo sources (merged, de-duplicated, listing-first):
-//   1. Auto-fetched REA CDN photos + floor plans via fetchListingMedia.
-//   2. User-supplied extras (state.subject.photos), e.g. inspection shots.
+// Photo sources (separate, de-duplicated within each list):
+//   1. subject.photos  — REA CDN listing photos + user-supplied extras.
+//   2. subject.floorplans — REA CDN floor-plan images (kept distinct so the
+//      render node can show them in a separate "Floor plan" block).
+//
+// Vision sees: photos.slice(0,7) + floorplans.slice(0,1) (cap 8 total).
 //
 // - No subject → in-band PARTIAL_DATA error (mirrors node 09/12 style).
-// - photos written to state regardless of whether vision succeeds (so the
-//   render's photo grid shows even if the LLM call fails).
-// - No photos after merge → return early with empty photos + null visionAnalysis.
-// - Up to 8 photos sent as image_url parts in a multimodal HumanMessage.
+// - photos + floorplans written to state regardless of whether vision succeeds
+//   (so the render's photo grid + floor-plan block shows even if the LLM fails).
+// - No photos AND no floorplans → return early with empty arrays + null visionAnalysis.
+// - Up to 8 images sent as image_url parts in a multimodal HumanMessage.
 // - Calls callWithFallback on the NON-reasoning path (no reasoningEffort).
-// - Any LLM failure is caught → photos still written, visionAnalysis null (graceful).
+// - Any LLM failure is caught → photos/floorplans still written, visionAnalysis null (graceful).
 
 import type { GraphState } from '@/agents/annotation';
 import { logger } from '@/lib/observability/logger';
@@ -20,7 +23,8 @@ import { callWithFallback } from '@/tools/llm/structuredCall';
 import type { ContentPart, LlmMessage } from '@/tools/llm/types';
 import { fetchListingMedia } from '@/tools/rapidapi/listingMedia';
 
-const MAX_PHOTOS = 8;
+const MAX_VISION_PHOTOS = 7; // photos sent to vision (leaves 1 slot for a floorplan)
+const MAX_VISION_FLOORPLANS = 1; // at most 1 floorplan sent to vision
 
 const SYSTEM_TEXT =
   'You are a qualified building inspector and property analyst reviewing residential listing photos. ' +
@@ -47,29 +51,32 @@ export async function visionAnalyseSubject(state: GraphState): Promise<Partial<G
   // Auto-fetch listing media — swallow all errors (graceful degradation).
   const media = lookupAddress ? await fetchListingMedia(lookupAddress).catch(() => null) : null;
 
-  // Merge: listing photos first, then floor plans, then user-supplied extras.
-  // De-duplicate by URL so re-runs don't double-up.
-  const photos = [
-    ...new Set([
-      ...(media?.photos ?? []),
-      ...(media?.floorplans ?? []),
-      ...(state.subject.photos ?? []),
-    ]),
-  ];
+  // Listing photos: REA CDN photos first, then user-supplied extras. Dedup by URL.
+  const photos = [...new Set([...(media?.photos ?? []), ...(state.subject.photos ?? [])])];
 
-  // Nothing to show or analyse — return early with photos written (empty array).
-  if (photos.length === 0) {
+  // Floor plans: kept separate so the PDF can render a distinct "Floor plan" block.
+  const floorplans = [...new Set([...(media?.floorplans ?? [])])];
+
+  // Nothing to show or analyse — return early with both arrays written (empty).
+  if (photos.length === 0 && floorplans.length === 0) {
     return {
       subject: {
         ...state.subject,
         photos: [],
+        floorplans: [],
         visionAnalysis: null,
       },
     };
   }
 
-  // Build multimodal message: text instruction + one image_url per photo (capped at 8)
-  const imageParts: ContentPart[] = photos.slice(0, MAX_PHOTOS).map((url) => ({
+  // Vision sees: up to 7 listing photos + up to 1 floor plan (cap 8 total).
+  const visionUrls = [
+    ...photos.slice(0, MAX_VISION_PHOTOS),
+    ...floorplans.slice(0, MAX_VISION_FLOORPLANS),
+  ];
+
+  // Build multimodal message: text instruction + one image_url per photo
+  const imageParts: ContentPart[] = visionUrls.map((url) => ({
     type: 'image_url',
     image_url: { url },
   }));
@@ -98,11 +105,12 @@ export async function visionAnalyseSubject(state: GraphState): Promise<Partial<G
     logger.warn({ err: String(err) }, 'visionAnalyseSubject: LLM call failed — skipping vision');
   }
 
-  // Always write photos back to state, regardless of vision success.
+  // Always write photos + floorplans back to state, regardless of vision success.
   return {
     subject: {
       ...state.subject,
       photos,
+      floorplans,
       visionAnalysis,
     },
   };

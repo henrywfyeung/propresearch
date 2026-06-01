@@ -50,6 +50,7 @@ const data: ReportData = {
   generatedAt: '2026-05-31T00:00:00.000Z',
   staticMapDataUrl: null,
   photos: [],
+  floorplans: [],
   subjectVision: null,
 };
 
@@ -418,6 +419,8 @@ describe('Location map rendering', () => {
 describe('Visual inspection rendering', () => {
   const PHOTO_URL = 'https://example.com/photo1.jpg';
   const PHOTO_URL_2 = 'https://example.com/photo2.jpg';
+  const FLOORPLAN_URL = 'data:image/jpeg;base64,/9j/floorplan==';
+  const FLOORPLAN_URL_2 = 'data:image/jpeg;base64,/9j/floorplan2==';
 
   const fullVision: SubjectVision = {
     condition: 'good',
@@ -450,8 +453,8 @@ describe('Visual inspection rendering', () => {
     expect(html).toContain('Updated kitchen');
   });
 
-  it('omits the whole section when photos is empty AND subjectVision is null', () => {
-    const html = renderReportHtml({ ...data, photos: [], subjectVision: null });
+  it('omits the whole section when photos is empty AND floorplans is empty AND subjectVision is null', () => {
+    const html = renderReportHtml({ ...data, photos: [], floorplans: [], subjectVision: null });
     expect(html).not.toContain('Property condition');
     expect(html).not.toContain('visual inspection');
   });
@@ -507,5 +510,68 @@ describe('Visual inspection rendering', () => {
     const valuationIdx = html.indexOf('Valuation');
     expect(locationIdx).toBeLessThan(inspectionIdx);
     expect(inspectionIdx).toBeLessThan(valuationIdx);
+  });
+
+  it('renders a distinct Floor plan block when floorplans is non-empty', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [PHOTO_URL],
+      floorplans: [FLOORPLAN_URL],
+      subjectVision: null,
+    });
+    // Floor plan label
+    expect(html).toContain('Floor plan');
+    // Floor plan img src embedded
+    expect(html).toContain(FLOORPLAN_URL);
+    // Photo grid also rendered
+    expect(html).toContain(PHOTO_URL);
+  });
+
+  it('renders multiple floor plan images when present', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [],
+      floorplans: [FLOORPLAN_URL, FLOORPLAN_URL_2],
+      subjectVision: null,
+    });
+    expect(html).toContain(FLOORPLAN_URL);
+    expect(html).toContain(FLOORPLAN_URL_2);
+  });
+
+  it('renders the section (with floor plan) even when photos is empty and vision is null', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [],
+      floorplans: [FLOORPLAN_URL],
+      subjectVision: null,
+    });
+    // Section is present
+    expect(html).toContain('Property condition');
+    expect(html).toContain('Floor plan');
+    expect(html).toContain(FLOORPLAN_URL);
+    // No photo grid element (photos is empty — the div with className="photo-grid" is not rendered)
+    expect(html).not.toContain('class="photo-grid"');
+  });
+
+  it('floor plan block appears after the photo grid in the section', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [PHOTO_URL],
+      floorplans: [FLOORPLAN_URL],
+      subjectVision: null,
+    });
+    const photoGridIdx = html.indexOf(PHOTO_URL);
+    const floorplanIdx = html.indexOf(FLOORPLAN_URL);
+    expect(photoGridIdx).toBeLessThan(floorplanIdx);
+  });
+
+  it('does not render Floor plan label when floorplans is empty', () => {
+    const html = renderReportHtml({
+      ...data,
+      photos: [PHOTO_URL],
+      floorplans: [],
+      subjectVision: null,
+    });
+    expect(html).not.toContain('Floor plan');
   });
 });

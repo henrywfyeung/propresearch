@@ -88,6 +88,7 @@ export const sampleSubject: SubjectProperty = {
     propertyType: 'House',
   },
   photos: [],
+  floorplans: [],
   listing: null,
   visionAnalysis: null,
   streetView: null,

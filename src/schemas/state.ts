@@ -54,6 +54,7 @@ export const ListingSchema = z.object({
 export const SubjectPropertySchema = z.object({
   attrs: PropertyAttrsSchema,
   photos: z.array(z.string().url()),
+  floorplans: z.array(z.string().url()).default([]),
   listing: ListingSchema.nullable(),
   visionAnalysis: SubjectVisionSchema.nullable(),
   streetView: StreetViewSchema.nullable(),

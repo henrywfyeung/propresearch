@@ -3,14 +3,14 @@
 //
 // Covers:
 //   - no subject in state → in-band PARTIAL_DATA, no LLM call
-//   - media returns photos+floorplans → merged into subject.photos (listing + floorplan + user extras, deduped),
-//     vision called over merged set (cap 8), result has visionAnalysis.
+//   - media returns photos+floorplans → subject.photos = listing photos + user extras (deduped);
+//     subject.floorplans = media floorplans (separate); vision sees photos.slice(0,7)+floorplans.slice(0,1).
 //   - media null (not listed) + user-supplied subject.photos → uses just user extras (vision runs on them).
-//   - media null + no user photos → {subject:{...,photos:[],visionAnalysis:null}}, no vision call.
-//   - vision throws → photos still written, visionAnalysis null (graceful).
+//   - media null + no user photos → {subject:{...,photos:[],floorplans:[],visionAnalysis:null}}, no vision call.
+//   - vision throws → photos + floorplans still written, visionAnalysis null (graceful).
 //   - Address: fetchListingMedia called with rawAddress (or resolvedAddress fallback).
 //   - LLM message shape, schema, node='visionSubject', NO reasoningEffort.
-//   - Photo cap at 8.
+//   - Vision image cap at 8 (7 photos + 1 floorplan).
 
 import { visionAnalyseSubject } from '@/agents/nodes/04a_visionAnalyseSubject';
 import { SubjectVisionSchema } from '@/schemas/vision';
@@ -131,11 +131,11 @@ describe('visionAnalyseSubject — address for fetchListingMedia', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Media returns photos + floorplans → merged, deduped, vision runs
+// Media returns photos + floorplans → separate arrays, vision sees both
 // ---------------------------------------------------------------------------
 
 describe('visionAnalyseSubject — media fetch succeeds', () => {
-  it('merges listing photos + floorplans + user extras into subject.photos (listing first)', async () => {
+  it('writes listing photos + user extras to subject.photos (listing first, deduped)', async () => {
     mockFetchListingMedia.mockResolvedValue(mediaResult);
     mockCallWithFallback.mockResolvedValue(validVision);
 
@@ -145,39 +145,58 @@ describe('visionAnalyseSubject — media fetch succeeds', () => {
     });
     const result = await visionAnalyseSubject(state);
 
-    const expected = [...LISTING_PHOTOS, ...FLOORPLAN_PHOTOS, ...USER_PHOTOS];
-    expect(result.subject?.photos).toEqual(expected);
+    // photos = listing photos + user extras (floorplans NOT merged in)
+    const expectedPhotos = [...LISTING_PHOTOS, ...USER_PHOTOS];
+    expect(result.subject?.photos).toEqual(expectedPhotos);
   });
 
-  it('deduplicates URLs across listing and user sources', async () => {
-    const sharedUrl = 'https://rea-cdn.com/photo1.jpg';
+  it('writes media floorplans to subject.floorplans (separate from photos)', async () => {
+    mockFetchListingMedia.mockResolvedValue(mediaResult);
+    mockCallWithFallback.mockResolvedValue(validVision);
+
+    const state = graphState({
+      rawAddress: '1 Awaba St, Mosman NSW 2088',
+      subject: { ...graphState().subject!, photos: USER_PHOTOS },
+    });
+    const result = await visionAnalyseSubject(state);
+
+    // floorplans are kept separate
+    expect(result.subject?.floorplans).toEqual(FLOORPLAN_PHOTOS);
+  });
+
+  it('deduplicates URLs within photos (not across photos and floorplans)', async () => {
+    const sharedPhotoUrl = 'https://rea-cdn.com/photo1.jpg';
     mockFetchListingMedia.mockResolvedValue({
       ...mediaResult,
-      photos: [sharedUrl, 'https://rea-cdn.com/photo2.jpg'],
-      floorplans: [],
+      photos: [sharedPhotoUrl, 'https://rea-cdn.com/photo2.jpg'],
+      floorplans: ['https://rea-cdn.com/floorplan1.jpg'],
     });
     mockCallWithFallback.mockResolvedValue(validVision);
 
     const state = graphState({
       rawAddress: '1 Awaba St',
-      // sharedUrl also present in user extras — should only appear once
-      subject: { ...graphState().subject!, photos: [sharedUrl, 'https://example.com/extra.jpg'] },
+      subject: {
+        ...graphState().subject!,
+        photos: [sharedPhotoUrl, 'https://example.com/extra.jpg'],
+      },
     });
     const result = await visionAnalyseSubject(state);
 
     const photos = result.subject?.photos ?? [];
     const unique = new Set(photos);
-    expect(unique.size).toBe(photos.length); // no duplicates
-    expect(photos).toContain(sharedUrl);
+    expect(unique.size).toBe(photos.length); // no duplicates in photos
+    expect(photos).toContain(sharedPhotoUrl); // appears exactly once
     expect(photos).toContain('https://rea-cdn.com/photo2.jpg');
     expect(photos).toContain('https://example.com/extra.jpg');
+    // floorplan must NOT appear in photos
+    expect(photos).not.toContain('https://rea-cdn.com/floorplan1.jpg');
   });
 
-  it('calls callWithFallback with the merged photo set (capped at 8), SubjectVisionSchema, node=visionSubject, no reasoningEffort', async () => {
+  it('vision sees photos.slice(0,7) + floorplans.slice(0,1) (cap 8)', async () => {
     mockFetchListingMedia.mockResolvedValue({
       listingUrl: null,
-      photos: MANY_LISTING_PHOTOS,
-      floorplans: [],
+      photos: MANY_LISTING_PHOTOS, // 10 photos
+      floorplans: ['https://rea-cdn.com/fp1.jpg', 'https://rea-cdn.com/fp2.jpg'], // 2 floorplans
     });
     mockCallWithFallback.mockResolvedValue(validVision);
 
@@ -202,7 +221,24 @@ describe('visionAnalyseSubject — media fetch succeeds', () => {
 
     const userContent = msgs[1]?.content as Array<{ type: string }>;
     const imageParts = userContent.filter((p) => p.type === 'image_url');
-    expect(imageParts).toHaveLength(8); // capped
+    // 7 photos + 1 floorplan = 8 total
+    expect(imageParts).toHaveLength(8);
+  });
+
+  it('vision sees fewer than 8 when fewer photos + floorplans are available', async () => {
+    mockFetchListingMedia.mockResolvedValue(mediaResult); // 2 photos + 1 floorplan = 3 total
+    mockCallWithFallback.mockResolvedValue(validVision);
+
+    const state = graphState({
+      rawAddress: '1 Awaba St',
+      subject: { ...graphState().subject!, photos: [] },
+    });
+    await visionAnalyseSubject(state);
+
+    const callOpts = mockCallWithFallback.mock.calls[0]?.[0];
+    const userContent = callOpts.messages[1]?.content as Array<{ type: string }>;
+    const imageParts = userContent.filter((p) => p.type === 'image_url');
+    expect(imageParts).toHaveLength(3); // 2 photos + 1 floorplan
   });
 
   it('returns visionAnalysis on success', async () => {
@@ -246,7 +282,7 @@ describe('visionAnalyseSubject — media null, user extras present', () => {
 // ---------------------------------------------------------------------------
 
 describe('visionAnalyseSubject — no photos at all', () => {
-  it('returns {subject:{...,photos:[],visionAnalysis:null}} and does not call vision', async () => {
+  it('returns photos:[], floorplans:[], visionAnalysis:null and does not call vision', async () => {
     mockFetchListingMedia.mockResolvedValue(null);
 
     const baseSubject = { ...graphState().subject!, photos: [] };
@@ -255,6 +291,7 @@ describe('visionAnalyseSubject — no photos at all', () => {
     );
 
     expect(result.subject?.photos).toEqual([]);
+    expect(result.subject?.floorplans).toEqual([]);
     expect(result.subject?.visionAnalysis).toBeNull();
     // Preserve other subject fields
     expect(result.subject?.attrs).toEqual(baseSubject.attrs);
@@ -267,7 +304,7 @@ describe('visionAnalyseSubject — no photos at all', () => {
 // ---------------------------------------------------------------------------
 
 describe('visionAnalyseSubject — LLM failure is graceful', () => {
-  it('writes photos to state even when callWithFallback throws', async () => {
+  it('writes photos + floorplans to state even when callWithFallback throws', async () => {
     mockFetchListingMedia.mockResolvedValue(mediaResult);
     mockCallWithFallback.mockRejectedValue(new Error('LLM both-providers-down'));
 
@@ -278,9 +315,11 @@ describe('visionAnalyseSubject — LLM failure is graceful', () => {
       }),
     );
 
-    // Photos are written
-    const expected = [...LISTING_PHOTOS, ...FLOORPLAN_PHOTOS, ...USER_PHOTOS];
-    expect(result.subject?.photos).toEqual(expected);
+    // Photos are written (listing photos + user extras; floorplans separate)
+    const expectedPhotos = [...LISTING_PHOTOS, ...USER_PHOTOS];
+    expect(result.subject?.photos).toEqual(expectedPhotos);
+    // Floorplans written separately
+    expect(result.subject?.floorplans).toEqual(FLOORPLAN_PHOTOS);
     // visionAnalysis is null, not an error
     expect(result.subject?.visionAnalysis).toBeNull();
     expect(result.errors).toBeUndefined();

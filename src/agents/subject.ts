@@ -26,6 +26,7 @@ export function buildSubject(raw: unknown): SubjectProperty {
   return {
     attrs: p.attrs,
     photos: p.photos,
+    floorplans: [],
     listing: p.listing ?? null,
     visionAnalysis: null,
     streetView: null,

@@ -2,6 +2,7 @@
 // HTML -> PDF -> S3. Render/upload failures propagate (the report fails; retryable).
 
 import type { GraphState } from '@/agents/annotation';
+import { fetchImagesAsDataUrls } from '@/report/fetchImages';
 import { renderReportPdf } from '@/report/pdf';
 import { renderReportHtml } from '@/report/render';
 import { toReportData } from '@/report/toReportData';
@@ -30,6 +31,12 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
 
     data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, selectedComps);
   }
+
+  // Download listing photos + floor plans as base64 data URLs so Puppeteer doesn't
+  // need to make network requests at render time (CDN fetches were timing out before
+  // networkidle0 fired, causing incomplete photo grids).
+  data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
+  data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
 
   const html = renderReportHtml(data);
   const pdf = await renderReportPdf(html);

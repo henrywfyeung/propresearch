@@ -31,6 +31,21 @@ describe('toReportData', () => {
     expect(data?.prose.summary?.[0]?.type).toBe('text');
   });
 
+  it('initialises photos and floorplans as empty arrays (render node overrides with base64)', () => {
+    const state = graphState({
+      subject: {
+        ...graphState().subject!,
+        photos: ['https://cdn.example.com/photo1.jpg'],
+        floorplans: ['https://cdn.example.com/fp1.jpg'],
+      },
+    });
+    const data = toReportData(state);
+    // toReportData is sync — it cannot fetch, so it always returns []
+    // The render node replaces them with downloaded base64 data URLs.
+    expect(data?.photos).toEqual([]);
+    expect(data?.floorplans).toEqual([]);
+  });
+
   it('returns null when subject or address is missing', () => {
     expect(toReportData(graphState({ subject: null }))).toBeNull();
     expect(toReportData(graphState({ resolvedAddress: null }))).toBeNull();

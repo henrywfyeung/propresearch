@@ -34,7 +34,10 @@ export function toReportData(state: GraphState): ReportData | null {
     generatedAt: new Date().toISOString(),
     // Populated by the render node after fetching the static map.
     staticMapDataUrl: null,
-    photos: subject.photos ?? [],
+    // photos + floorplans are initialised empty here; the render node overrides
+    // them with downloaded base64 data URLs (toReportData is sync, can't fetch).
+    photos: [],
+    floorplans: [],
     subjectVision: subject.visionAnalysis ?? null,
   };
 }

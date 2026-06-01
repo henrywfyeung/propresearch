@@ -45,8 +45,10 @@ export interface ReportData {
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
   staticMapDataUrl: string | null;
-  /** Listing photo URLs from user-supplied photos (node 04a input). */
+  /** Listing photo URLs (base64 data URLs after render-node download). */
   photos: string[];
+  /** Floor plan image URLs (base64 data URLs after render-node download). */
+  floorplans: string[];
   /** Visual inspection result from node 04a, or null when vision was skipped/failed. */
   subjectVision: SubjectVision | null;
 }
@@ -140,6 +142,9 @@ export const reportStyles = `
   .vision-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
   .vision-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 6px 0 2px; }
   .vision-unavailable { font-size: 9pt; color: var(--muted); font-style: italic; padding: 4px 0; }
+  .floorplan-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin: 12px 0 6px; }
+  .floorplan-block { margin: 0 0 10px; }
+  .floorplan-block img { width: 100%; border-radius: 3px; border: 1px solid var(--line); display: block; margin-bottom: 6px; }
 `;
 
 function paragraphs(blocks: ClaimBlock[] | undefined): ReactElement[] {
@@ -262,17 +267,19 @@ function conditionChipClass(condition: SubjectVision['condition']): string {
 
 /**
  * Renders the "Property condition & visual inspection" section.
- * Returns null when both photos and subjectVision are absent.
+ * Returns null when photos, floorplans, and subjectVision are all absent.
  */
 function renderVisualInspection(
   photos: string[],
+  floorplans: string[],
   vision: SubjectVision | null,
 ): ReactElement | null {
   const displayPhotos = photos.slice(0, PHOTO_DISPLAY_MAX);
   const hasPhotos = displayPhotos.length > 0;
+  const hasFloorplans = floorplans.length > 0;
 
   // Whole section omitted when nothing to show.
-  if (!hasPhotos && vision === null) return null;
+  if (!hasPhotos && !hasFloorplans && vision === null) return null;
 
   const children: ReactElement[] = [
     h('h2', { key: 'h' }, 'Property condition & visual inspection'),
@@ -348,6 +355,24 @@ function renderVisualInspection(
     );
   }
 
+  // Floor plan block — always shown when floor plans are available, distinct from the photo grid.
+  if (hasFloorplans) {
+    children.push(h('div', { key: 'fp-label', className: 'floorplan-label' }, 'Floor plan'));
+    children.push(
+      h(
+        'div',
+        { key: 'fp-block', className: 'floorplan-block' },
+        ...floorplans.map((src, i) =>
+          h('img', {
+            key: `fp-${i}`,
+            src,
+            alt: `Floor plan ${i + 1}`,
+          }),
+        ),
+      ),
+    );
+  }
+
   return h('section', { key: 'visual-inspection' }, ...children);
 }
 
@@ -407,6 +432,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     demographics,
     staticMapDataUrl: mapDataUrl,
     photos,
+    floorplans,
     subjectVision,
   } = data;
   const selected = comparables.filter(
@@ -600,7 +626,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         )
       : null;
 
-  const visualInspectionSection = renderVisualInspection(photos, subjectVision);
+  const visualInspectionSection = renderVisualInspection(photos, floorplans, subjectVision);
 
   return h(
     'div',

@@ -137,15 +137,11 @@ describe('fetchListingMedia', () => {
     expect(result).toBeNull();
   });
 
-  it(
-    'returns null on network error (graceful degradation)',
-    async () => {
-      server.use(http.get(`https://${HOST}/auto-complete`, () => HttpResponse.error()));
-      const result = await runWithReportContext({ reportId: 'r4' }, () =>
-        fetchListingMedia('2/25 Mosman Street, Mosman NSW 2088'),
-      );
-      expect(result).toBeNull();
-    },
-    20_000, // pRetry exhausts up to ~15s (4 retries, exponential backoff)
-  );
+  it('returns null on network error (graceful degradation)', async () => {
+    server.use(http.get(`https://${HOST}/auto-complete`, () => HttpResponse.error()));
+    const result = await runWithReportContext({ reportId: 'r4' }, () =>
+      fetchListingMedia('2/25 Mosman Street, Mosman NSW 2088'),
+    );
+    expect(result).toBeNull();
+  }, 20_000); // pRetry exhausts up to ~15s (4 retries, exponential backoff)
 });
