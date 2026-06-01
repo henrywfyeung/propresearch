@@ -12,10 +12,22 @@ import process from 'node:process';
 
 process.loadEnvFile('.env.local');
 
-// Photos are user-supplied (R55): pass listing/floor-plan image URLs via the
-// PHOTOS env var (comma-separated) to exercise Node 04a's visual inspection.
+// Subject attrs are overridable via env (BEDS/BATHS/PARKING/LAND_AREA/PROPERTY_TYPE)
+// so the demo can match a real currently-listed property. Node 04a now AUTO-fetches
+// the listing's photos + floor plan from REA; PHOTOS env adds optional extras (R55).
+const numEnv = (v: string | undefined, d: number): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+};
 const SUBJECT = {
-  attrs: { beds: 4, baths: 2, parking: 2, landArea: 600, buildingArea: null, propertyType: 'House' },
+  attrs: {
+    beds: numEnv(process.env.BEDS, 4),
+    baths: numEnv(process.env.BATHS, 2),
+    parking: numEnv(process.env.PARKING, 2),
+    landArea: process.env.LAND_AREA ? Number(process.env.LAND_AREA) : null,
+    buildingArea: null,
+    propertyType: process.env.PROPERTY_TYPE ?? 'House',
+  },
   photos: (process.env.PHOTOS ?? '')
     .split(',')
     .map((s) => s.trim())
