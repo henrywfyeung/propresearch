@@ -21,6 +21,7 @@ const NODE_ORDER = [
   'fetchCandidateComps',
   'fetchRisks',
   'fetchPlanning',
+  'fetchDemographics',
   'reasonAndSelect',
   'triangulate',
   'compose',

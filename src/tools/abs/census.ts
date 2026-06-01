@@ -120,9 +120,11 @@ const MEDAVG_MAP: Record<string, keyof MediansResult> = {
 };
 
 function parseSdmxCsv(text: string): MediansResult {
-  const lines = text.trim().split('\n');
+  // The live ABS SDMX-CSV uses CRLF line endings — split on \r?\n (and trim cells)
+  // or the last header cell becomes 'OBS_VALUE\r' and indexOf fails → all-null.
+  const lines = text.trim().split(/\r?\n/);
   // First line is the header.
-  const header = lines[0]?.split(',') ?? [];
+  const header = (lines[0]?.split(',') ?? []).map((h) => h.trim());
   const medavgIdx = header.indexOf('MEDAVG');
   const obsIdx = header.indexOf('OBS_VALUE');
 

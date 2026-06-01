@@ -54,7 +54,7 @@ const MOSMAN_SDMX_CSV = [
   `ABS:C21_G02_SA2(1.0.0),5,${MOSMAN_SA2},SA2,1,2021,3500`, // medianMortgageMonthly
   `ABS:C21_G02_SA2(1.0.0),6,${MOSMAN_SA2},SA2,1,2021,600`, // medianRentWeekly
   `ABS:C21_G02_SA2(1.0.0),8,${MOSMAN_SA2},SA2,1,2021,2.3`, // avgHouseholdSize
-].join('\n');
+].join('\r\n'); // CRLF — matches the live ABS SDMX-CSV (guards the header-parse regression)
 
 // ArcGIS FeatureServer returns lowercase attribute keys (confirmed live)
 const MOSMAN_G01_RESPONSE = {
