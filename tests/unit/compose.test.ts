@@ -103,6 +103,7 @@ describe('compose', () => {
       risks: [sampleRisk],
       recentDAs: [],
       suburbStats: null,
+      demographics: null,
     };
     const msgs = buildMessages('risks', input);
     const userContent = msgs[1]?.content ?? '';
@@ -126,6 +127,7 @@ describe('compose', () => {
       risks: [],
       recentDAs: [sampleDA],
       suburbStats: null,
+      demographics: null,
     };
     const msgs = buildMessages('planning', input);
     const userContent = msgs[1]?.content ?? '';

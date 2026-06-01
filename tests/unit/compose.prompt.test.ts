@@ -36,11 +36,12 @@ const input = {
   risks: [],
   recentDAs: [],
   suburbStats: null,
+  demographics: null,
 };
 
 describe('compose prompt', () => {
-  it('is at version v1.4', () => {
-    expect(version).toBe('v1.4');
+  it('is at version v1.5', () => {
+    expect(version).toBe('v1.5');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);
@@ -92,6 +93,37 @@ describe('compose prompt', () => {
   it('market section user message includes null stats when unavailable', () => {
     const msgs = buildMessages('market', { ...input, suburbStats: null });
     expect(msgs[1]?.content).toContain('Suburb stats');
+    expect(msgs[1]?.content).toContain('null');
+  });
+  it('market section system message mentions demographic context when available', () => {
+    const msgs = buildMessages('market', input);
+    expect(msgs[0]?.content).toContain('demographic');
+    expect(msgs[0]?.content).toContain('owner-occupier');
+    expect(msgs[0]?.content).toContain('weekly');
+  });
+  it('market section user message includes demographics JSON when provided', () => {
+    const demo = {
+      sa2Code: '121041688',
+      sa2Name: 'Mosman',
+      censusYear: 2021,
+      population: 11_234,
+      medianAge: 42,
+      medianHouseholdIncomeWeekly: 2_800,
+      medianPersonalIncomeWeekly: 1_500,
+      medianRentWeekly: 650,
+      medianMortgageMonthly: 3_200,
+      avgHouseholdSize: 2.4,
+      ownerOccupiedPct: 72.1,
+      rentedPct: 22.3,
+    };
+    const msgs = buildMessages('market', { ...input, demographics: demo });
+    expect(msgs[1]?.content).toContain('Demographics');
+    expect(msgs[1]?.content).toContain('11234');
+    expect(msgs[1]?.content).toContain('Mosman');
+  });
+  it('market section user message includes null demographics when not available', () => {
+    const msgs = buildMessages('market', { ...input, demographics: null });
+    expect(msgs[1]?.content).toContain('Demographics');
     expect(msgs[1]?.content).toContain('null');
   });
 });

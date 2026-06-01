@@ -10,6 +10,7 @@ import type {
   ResolvedAddress,
   RiskFlag,
   SubjectProperty,
+  SuburbDemographics,
   TriangulatedValue,
 } from '@/schemas/state';
 import { Annotation } from '@langchain/langgraph';
@@ -38,6 +39,10 @@ export const GraphAnnotation = Annotation.Root({
     default: () => null,
   }),
   market: Annotation<MarketContext | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
+  }),
+  demographics: Annotation<SuburbDemographics | null>({
     reducer: (_c, u) => u,
     default: () => null,
   }),

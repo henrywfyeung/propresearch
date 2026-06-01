@@ -55,6 +55,7 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
     risks: state.risks ?? [],
     recentDAs: state.market?.recentDAs ?? [],
     suburbStats: computeSuburbStats(comparables),
+    demographics: state.demographics ?? null,
   };
 
   const entries = await Promise.all(

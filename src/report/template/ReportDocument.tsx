@@ -11,7 +11,7 @@
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
-import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
+import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 import { type ReactElement, createElement as h } from 'react';
 
@@ -39,6 +39,7 @@ export interface ReportData {
   risks: RiskFlag[];
   recentDAs: RecentDA[];
   suburbStats: SuburbStats | null;
+  demographics: SuburbDemographics | null;
   prose: ReportProse;
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
@@ -110,6 +111,10 @@ export const reportStyles = `
   .stats-grid .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .stats-grid .v { font-size: 11pt; font-weight: 600; }
   .stats-unavailable { font-size: 9pt; color: var(--muted); font-style: italic; padding: 6px 0; }
+  .demo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 10px 0 4px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .demo-grid .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .demo-grid .v { font-size: 11pt; font-weight: 600; }
+  .demo-label { font-size: 8pt; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); margin: 10px 0 4px; }
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
   .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
@@ -176,9 +181,54 @@ function statCell(label: string, value: string): ReactElement {
   );
 }
 
+function demoCell(label: string, value: string): ReactElement {
+  return h(
+    'div',
+    { key: label },
+    h('div', { className: 'k' }, label),
+    h('div', { className: 'v num' }, value),
+  );
+}
+
+function renderDemographicsBlock(demo: SuburbDemographics): ReactElement {
+  const cells: (ReactElement | null)[] = [
+    demo.population !== null
+      ? demoCell('Population', demo.population.toLocaleString('en-AU'))
+      : null,
+    demo.medianAge !== null ? demoCell('Median age', String(demo.medianAge)) : null,
+    demo.medianHouseholdIncomeWeekly !== null
+      ? demoCell(
+          'Median household income',
+          `${formatValue(demo.medianHouseholdIncomeWeekly, 'currency-aud')}/wk`,
+        )
+      : null,
+    demo.ownerOccupiedPct !== null ? demoCell('Owner-occupied', `${demo.ownerOccupiedPct}%`) : null,
+    demo.medianRentWeekly !== null
+      ? demoCell('Median rent', `${formatValue(demo.medianRentWeekly, 'currency-aud')}/wk`)
+      : null,
+    demo.avgHouseholdSize !== null
+      ? demoCell('Avg household size', String(demo.avgHouseholdSize))
+      : null,
+  ].filter((el): el is ReactElement => el !== null);
+
+  if (cells.length === 0) return h('span', { key: 'demo-empty' });
+
+  return h(
+    'div',
+    { key: 'demo-block' },
+    h(
+      'div',
+      { className: 'demo-label' },
+      `SA2 Demographics · ${demo.sa2Name} · ${demo.censusYear} Census`,
+    ),
+    h('div', { className: 'demo-grid' }, ...cells),
+  );
+}
+
 function renderSuburbMarket(
   stats: SuburbStats | null,
   blocks: ClaimBlock[] | undefined,
+  demographics: SuburbDemographics | null,
 ): ReactElement {
   const children: ReactElement[] = [h('h2', { key: 'h' }, 'Suburb market')];
   children.push(...paragraphs(blocks));
@@ -211,6 +261,11 @@ function renderSuburbMarket(
     );
   }
 
+  // Demographics block — only when data is available
+  if (demographics !== null) {
+    children.push(renderDemographicsBlock(demographics));
+  }
+
   return h('section', { key: 'market' }, ...children);
 }
 
@@ -223,6 +278,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     risks,
     recentDAs,
     suburbStats,
+    demographics,
     staticMapDataUrl: mapDataUrl,
   } = data;
   const selected = comparables.filter(
@@ -349,7 +405,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     ...compCards,
   );
 
-  const marketSection = renderSuburbMarket(suburbStats, prose.market);
+  const marketSection = renderSuburbMarket(suburbStats, prose.market, demographics);
 
   const riskSection = h(
     'section',

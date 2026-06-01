@@ -27,6 +27,7 @@ const data: ReportData = {
   risks: [],
   recentDAs: [],
   suburbStats: null,
+  demographics: null,
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -306,6 +307,77 @@ describe('Suburb market rendering', () => {
     const riskIdx = html.indexOf('Risk register');
     expect(comparablesIdx).toBeLessThan(marketIdx);
     expect(marketIdx).toBeLessThan(riskIdx);
+  });
+});
+
+describe('Demographics block rendering', () => {
+  const sampleDemographics = {
+    sa2Code: '121041688',
+    sa2Name: 'Mosman',
+    censusYear: 2021 as const,
+    population: 11_234,
+    medianAge: 42,
+    medianHouseholdIncomeWeekly: 2_800,
+    medianPersonalIncomeWeekly: 1_500,
+    medianRentWeekly: 650,
+    medianMortgageMonthly: 3_200,
+    avgHouseholdSize: 2.4,
+    ownerOccupiedPct: 72.1,
+    rentedPct: 22.3,
+  };
+
+  it('renders the demographics label with SA2 name and census year when demographics is non-null', () => {
+    const html = renderReportHtml({ ...data, demographics: sampleDemographics });
+    expect(html).toContain('Mosman');
+    expect(html).toContain('2021 Census');
+  });
+
+  it('renders population, median age, household income, owner-occupied %, and median rent', () => {
+    const html = renderReportHtml({ ...data, demographics: sampleDemographics });
+    expect(html).toContain('Population');
+    expect(html).toContain('11'); // part of 11,234
+    expect(html).toContain('Median age');
+    expect(html).toContain('42');
+    expect(html).toContain('Median household income');
+    expect(html).toContain('Owner-occupied');
+    expect(html).toContain('72.1%');
+    expect(html).toContain('Median rent');
+    expect(html).toContain('/wk');
+  });
+
+  it('omits the demographics block when demographics is null', () => {
+    const html = renderReportHtml({ ...data, demographics: null });
+    expect(html).not.toContain('2021 Census');
+    // The demographics label text must not appear (CSS stays in <style>; content DOM won't have it)
+    expect(html).not.toContain('SA2 Demographics');
+  });
+
+  it('renders demographics block inside the Suburb market section', () => {
+    const html = renderReportHtml({ ...data, demographics: sampleDemographics });
+    const marketIdx = html.indexOf('Suburb market');
+    const demoIdx = html.indexOf('2021 Census');
+    const riskIdx = html.indexOf('Risk register');
+    expect(marketIdx).toBeLessThan(demoIdx);
+    expect(demoIdx).toBeLessThan(riskIdx);
+  });
+
+  it('renders gracefully when all nullable census fields are null', () => {
+    const partial = {
+      sa2Code: '121041688',
+      sa2Name: 'Mosman',
+      censusYear: 2021 as const,
+      population: null,
+      medianAge: null,
+      medianHouseholdIncomeWeekly: null,
+      medianPersonalIncomeWeekly: null,
+      medianRentWeekly: null,
+      medianMortgageMonthly: null,
+      avgHouseholdSize: null,
+      ownerOccupiedPct: null,
+      rentedPct: null,
+    };
+    // Should not throw, and SA2 Demographics label should not render (no cells)
+    expect(() => renderReportHtml({ ...data, demographics: partial })).not.toThrow();
   });
 });
 
