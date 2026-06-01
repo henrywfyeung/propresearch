@@ -39,8 +39,8 @@ export default async function DashboardPage() {
     <main className="mx-auto max-w-5xl px-6 py-12">
       <header className="mb-10 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">PropResearch</h1>
-          <p className="mt-1 text-sm text-ink-muted">Internal due-diligence dashboard</p>
+          <h1 className="font-display text-3xl font-semibold text-ink">Property research</h1>
+          <p className="mt-1 text-sm text-ink-muted">My property dossiers</p>
         </div>
         <div className="flex items-center gap-3 text-sm text-ink-muted">
           <span className="font-mono text-xs">{email}</span>

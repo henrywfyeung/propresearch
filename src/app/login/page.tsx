@@ -20,8 +20,8 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm rounded-lg border border-black/5 bg-bg-card p-8 shadow-sm">
-        <h1 className="font-display text-2xl font-semibold text-ink">PropResearch</h1>
-        <p className="mt-1 text-sm text-ink-muted">Internal due-diligence tool</p>
+        <h1 className="font-display text-2xl font-semibold text-ink">Property research</h1>
+        <p className="mt-1 text-sm text-ink-muted">Personal property research</p>
 
         {message ? (
           <div className="mt-6 rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">

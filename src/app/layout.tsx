@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'PropResearch',
-  description: 'AI-assisted property due-diligence for buyer’s agents',
-  robots: { index: false, follow: false }, // internal tool
+  title: 'Property research',
+  description: 'Personal property research',
+  robots: { index: false, follow: false }, // private, personal tool
 };
 
 export default function RootLayout({

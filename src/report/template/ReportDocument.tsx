@@ -629,7 +629,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const footer = h(
     'footer',
     null,
-    h('span', null, 'PropResearch · personal research dossier'),
+    h('span', null, 'Personal property research'),
     h('span', { className: 'num' }, formatValue(data.generatedAt, 'date')),
   );
 
