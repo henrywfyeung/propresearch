@@ -113,9 +113,13 @@ describe('fetchImagesAsDataUrls', () => {
     expect(results[0]).toMatch(/^data:image\/jpeg;base64,/);
   });
 
-  it('skips a URL where fetch throws', async () => {
+  it('skips a URL where fetch throws on every attempt', async () => {
     vi.mocked(global.fetch)
+      // URL1 (bad.jpg) — rejects on all 3 attempts
       .mockRejectedValueOnce(new Error('network error'))
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockRejectedValueOnce(new Error('network error'))
+      // URL2 (ok.jpg) — succeeds first try
       .mockResolvedValueOnce(jpegResponse());
 
     const results = await fetchImagesAsDataUrls(
@@ -125,6 +129,51 @@ describe('fetchImagesAsDataUrls', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  it('retries a transient throw and succeeds on a later attempt', async () => {
+    vi.mocked(global.fetch)
+      .mockRejectedValueOnce(new Error('ECONNRESET')) // attempt 1 — transient
+      .mockResolvedValueOnce(jpegResponse()); // attempt 2 — success
+
+    const results = await fetchImagesAsDataUrls(['https://cdn.example.com/a.jpg'], 1);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatch(/^data:image\/jpeg;base64,/);
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a 5xx response then succeeds', async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(makeFetchResponse({ ok: false, status: 503 }))
+      .mockResolvedValueOnce(jpegResponse());
+
+    const results = await fetchImagesAsDataUrls(['https://cdn.example.com/a.jpg'], 1);
+
+    expect(results).toHaveLength(1);
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT retry a 404 — skips immediately (permanent)', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      makeFetchResponse({ ok: false, status: 404 }),
+    );
+
+    const results = await fetchImagesAsDataUrls(['https://cdn.example.com/missing.jpg'], 1);
+
+    expect(results).toHaveLength(0);
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1); // no retry on 404
+  });
+
+  it('does NOT retry a non-image content-type — skips immediately (permanent)', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      makeFetchResponse({ ok: true, contentType: 'text/html', body: new Uint8Array([1]) }),
+    );
+
+    const results = await fetchImagesAsDataUrls(['https://example.com/not-an-image'], 1);
+
+    expect(results).toHaveLength(0);
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1); // no retry
   });
 
   it('respects the cap — returns at most cap items', async () => {

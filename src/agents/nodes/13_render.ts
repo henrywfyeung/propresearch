@@ -2,6 +2,7 @@
 // HTML -> PDF -> S3. Render/upload failures propagate (the report fails; retryable).
 
 import type { GraphState } from '@/agents/annotation';
+import { logger } from '@/lib/observability/logger';
 import { fetchImagesAsDataUrls } from '@/report/fetchImages';
 import { renderReportPdf } from '@/report/pdf';
 import { renderReportHtml } from '@/report/render';
@@ -37,6 +38,20 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
   // networkidle0 fired, causing incomplete photo grids).
   data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
   data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
+
+  // Diagnostic: how many photos arrived in state vs how many actually embedded.
+  // A gap (state has N, embedded < N) points at render-time CDN download failures;
+  // state itself being short points upstream (Node 04a fetch / fan-out).
+  logger.info(
+    {
+      reportId: state.reportId,
+      statePhotos: state.subject?.photos?.length ?? 0,
+      stateFloorplans: state.subject?.floorplans?.length ?? 0,
+      embeddedPhotos: data.photos.length,
+      embeddedFloorplans: data.floorplans.length,
+    },
+    'render: image embedding counts',
+  );
 
   const html = renderReportHtml(data);
   const pdf = await renderReportPdf(html);
