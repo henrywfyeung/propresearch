@@ -115,7 +115,12 @@ async function runOpenAiReasoning(
     text: { format: zodTextFormat(opts.schema, 'structured_output') },
     background: true,
   });
-  const deadline = Date.now() + 280_000; // polls, not a held connection; < Vercel Pro 300s
+  // Polls a background job (not a held connection). Default 280s stays < Vercel
+  // Pro's 300s function limit for the webapp/Inngest path; OPENAI_RESPONSES_TIMEOUT_MS
+  // lets non-Vercel callers (e.g. the standalone run-report-live CLI) extend it,
+  // since high-effort gpt-5.4 reasoning occasionally exceeds 280s (tail latency).
+  const timeoutMs = Number(process.env.OPENAI_RESPONSES_TIMEOUT_MS) || 280_000;
+  const deadline = Date.now() + timeoutMs;
   while (resp.status === 'queued' || resp.status === 'in_progress') {
     if (Date.now() > deadline) {
       throw new Error(`OpenAI Responses timed out (status=${resp.status}, id=${resp.id})`);
