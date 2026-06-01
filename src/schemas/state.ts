@@ -95,6 +95,26 @@ export const ComparableSchema = z.object({
 export type Comparable = z.infer<typeof ComparableSchema>;
 
 // --------------------------------------------------------------------------
+// ABS Census demographics (SA2-level) — spec §2
+// --------------------------------------------------------------------------
+
+export const SuburbDemographicsSchema = z.object({
+  sa2Code: z.string(),
+  sa2Name: z.string(),
+  population: z.number().nullable(),
+  medianAge: z.number().nullable(),
+  medianHouseholdIncomeWeekly: z.number().nullable(),
+  medianPersonalIncomeWeekly: z.number().nullable(),
+  medianRentWeekly: z.number().nullable(),
+  medianMortgageMonthly: z.number().nullable(),
+  avgHouseholdSize: z.number().nullable(),
+  ownerOccupiedPct: z.number().nullable(),
+  rentedPct: z.number().nullable(),
+  censusYear: z.number(),
+});
+export type SuburbDemographics = z.infer<typeof SuburbDemographicsSchema>;
+
+// --------------------------------------------------------------------------
 // Market context / planning
 // --------------------------------------------------------------------------
 
@@ -215,6 +235,7 @@ export const ReportStateSchema = z.object({
   subject: SubjectPropertySchema.nullable(),
   comparables: z.array(ComparableSchema),
   market: MarketContextSchema.nullable(),
+  demographics: SuburbDemographicsSchema.nullable(),
   risks: z.array(RiskFlagSchema),
   triangulation: TriangulatedValueSchema.nullable(),
   rentals: RentalEvidenceSchema.nullable(),
