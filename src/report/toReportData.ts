@@ -2,6 +2,7 @@
 
 import type { GraphState } from '@/agents/annotation';
 import type { ReportData } from '@/report/template/ReportDocument';
+import { computeSuburbStats } from '@/tools/market/suburbStats';
 
 export function toReportData(state: GraphState): ReportData | null {
   const a = state.resolvedAddress;
@@ -27,6 +28,7 @@ export function toReportData(state: GraphState): ReportData | null {
     comparables: state.comparables,
     risks: state.risks ?? [],
     recentDAs: state.market?.recentDAs ?? [],
+    suburbStats: computeSuburbStats(state.comparables),
     prose: state.prose,
     generatedAt: new Date().toISOString(),
   };

@@ -35,11 +35,12 @@ const input = {
   ],
   risks: [],
   recentDAs: [],
+  suburbStats: null,
 };
 
 describe('compose prompt', () => {
-  it('is at version v1.3', () => {
-    expect(version).toBe('v1.3');
+  it('is at version v1.4', () => {
+    expect(version).toBe('v1.4');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);
@@ -67,5 +68,30 @@ describe('compose prompt', () => {
   it('planning section user message includes the serialised DA list', () => {
     const msgs = buildMessages('planning', { ...input, recentDAs: [] });
     expect(msgs[1]?.content).toContain('Recent DAs');
+  });
+  it('market section system message mentions recent sales market context', () => {
+    const msgs = buildMessages('market', input);
+    expect(msgs[0]?.role).toBe('system');
+    expect(msgs[0]?.content).toContain("suburb's recent sales market");
+    expect(msgs[0]?.content).toContain('sample was too small');
+  });
+  it('market section user message includes the suburb stats JSON', () => {
+    const stats = {
+      sampleSize: 5,
+      medianSalePrice: 2_500_000,
+      minSalePrice: 2_000_000,
+      maxSalePrice: 3_000_000,
+      medianBeds: 3,
+      medianBaths: 2,
+      mostRecentSaleDate: '2026-05-01',
+    };
+    const msgs = buildMessages('market', { ...input, suburbStats: stats });
+    expect(msgs[1]?.content).toContain('Suburb stats');
+    expect(msgs[1]?.content).toContain('2500000');
+  });
+  it('market section user message includes null stats when unavailable', () => {
+    const msgs = buildMessages('market', { ...input, suburbStats: null });
+    expect(msgs[1]?.content).toContain('Suburb stats');
+    expect(msgs[1]?.content).toContain('null');
   });
 });

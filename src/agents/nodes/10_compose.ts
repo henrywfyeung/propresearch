@@ -7,6 +7,7 @@ import { type ComposeInput, type ComposeSection, buildMessages, version } from '
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable } from '@/schemas/state';
 import { callWithFallback } from '@/tools/llm/structuredCall';
+import { computeSuburbStats } from '@/tools/market/suburbStats';
 import { z } from 'zod';
 
 const SECTIONS: ComposeSection[] = [
@@ -14,6 +15,7 @@ const SECTIONS: ComposeSection[] = [
   'subject',
   'valuation',
   'comparables',
+  'market',
   'risks',
   'planning',
 ];
@@ -52,6 +54,7 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
       .map(toCompSummary),
     risks: state.risks ?? [],
     recentDAs: state.market?.recentDAs ?? [],
+    suburbStats: computeSuburbStats(comparables),
   };
 
   const entries = await Promise.all(

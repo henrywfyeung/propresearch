@@ -26,6 +26,7 @@ const data: ReportData = {
   comparables: [],
   risks: [],
   recentDAs: [],
+  suburbStats: null,
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -229,5 +230,80 @@ describe('Planning activity rendering', () => {
     expect(html).not.toContain('DA number 11');
     // Overflow line
     expect(html).toContain('3 more');
+  });
+});
+
+describe('Suburb market rendering', () => {
+  const sampleStats = {
+    sampleSize: 8,
+    medianSalePrice: 2_500_000,
+    minSalePrice: 2_000_000,
+    maxSalePrice: 3_200_000,
+    medianBeds: 3,
+    medianBaths: 2,
+    mostRecentSaleDate: '2026-05-01',
+  };
+
+  it('renders Suburb market heading', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    expect(html).toContain('Suburb market');
+  });
+
+  it('renders the stats grid with sample size and median price', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    expect(html).toContain('Sample size');
+    expect(html).toContain('8');
+    expect(html).toContain('Median sale price');
+    // formatted as AUD — look for some part of the formatted value
+    expect(html).toMatch(/2,500,000/);
+  });
+
+  it('renders price range min and max', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    expect(html).toContain('Price range');
+    expect(html).toMatch(/2,000,000/);
+    expect(html).toMatch(/3,200,000/);
+  });
+
+  it('renders median beds and baths', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    expect(html).toContain('Median beds');
+    expect(html).toContain('Median baths');
+  });
+
+  it('renders most recent sale date', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    expect(html).toContain('Most recent sale');
+    // date formatted via formatValue — "1 May 2026" or similar
+    expect(html).toContain('2026');
+  });
+
+  it('renders prose.market paragraphs above the stats grid', () => {
+    const marketProse: ReportData['prose'] = {
+      ...data.prose,
+      market: [{ type: 'text', text: 'Recent comparable sales indicate a competitive market.' }],
+    };
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats, prose: marketProse });
+    expect(html).toContain('Recent comparable sales indicate a competitive market.');
+    // prose should appear before the stats grid
+    const proseIdx = html.indexOf('Recent comparable sales indicate');
+    const gridIdx = html.indexOf('Sample size');
+    expect(proseIdx).toBeLessThan(gridIdx);
+  });
+
+  it('renders the muted unavailable note when suburbStats is null', () => {
+    const html = renderReportHtml({ ...data, suburbStats: null });
+    expect(html).toContain('Suburb market');
+    expect(html).toContain('Not enough recent comparable sales to summarise the suburb market.');
+    expect(html).not.toContain('Sample size');
+  });
+
+  it('market section appears after comparables and before risk register', () => {
+    const html = renderReportHtml({ ...data, suburbStats: sampleStats });
+    const marketIdx = html.indexOf('Suburb market');
+    const comparablesIdx = html.indexOf('Comparable sales');
+    const riskIdx = html.indexOf('Risk register');
+    expect(comparablesIdx).toBeLessThan(marketIdx);
+    expect(marketIdx).toBeLessThan(riskIdx);
   });
 });

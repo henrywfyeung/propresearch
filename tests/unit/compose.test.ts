@@ -57,7 +57,7 @@ const sampleRisk: RiskFlag = {
 };
 
 describe('compose', () => {
-  it('writes all six sections (including risks and planning) and stamps the valuation range first', async () => {
+  it('writes all seven sections (including market, risks and planning) and stamps the valuation range first', async () => {
     const state = graphState({
       comparables: [sampleComparable('a', { selection: 'fair-value', adjustedValue: 2_500_000 })],
       triangulation: tri,
@@ -67,6 +67,7 @@ describe('compose', () => {
     const out = await compose(state);
     expect(Object.keys(out.prose ?? {}).sort()).toEqual([
       'comparables',
+      'market',
       'planning',
       'risks',
       'subject',
@@ -83,7 +84,7 @@ describe('compose', () => {
       expect(first.high).toBe(2_600_000);
       expect(first.sourceRef.path).toBe('/triangulation/reconciled');
     }
-    expect(mockLlm).toHaveBeenCalledTimes(6);
+    expect(mockLlm).toHaveBeenCalledTimes(7);
   });
 
   it('risks section messages include the risk category and severity', () => {
@@ -101,6 +102,7 @@ describe('compose', () => {
       selectedComps: [],
       risks: [sampleRisk],
       recentDAs: [],
+      suburbStats: null,
     };
     const msgs = buildMessages('risks', input);
     const userContent = msgs[1]?.content ?? '';
@@ -123,6 +125,7 @@ describe('compose', () => {
       selectedComps: [],
       risks: [],
       recentDAs: [sampleDA],
+      suburbStats: null,
     };
     const msgs = buildMessages('planning', input);
     const userContent = msgs[1]?.content ?? '';

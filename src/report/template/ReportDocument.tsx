@@ -12,6 +12,7 @@ import { priceChartSvg } from '@/report/charts/priceChart';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
+import type { SuburbStats } from '@/tools/market/suburbStats';
 import { type ReactElement, createElement as h } from 'react';
 
 export interface ReportData {
@@ -37,6 +38,7 @@ export interface ReportData {
   comparables: Comparable[];
   risks: RiskFlag[];
   recentDAs: RecentDA[];
+  suburbStats: SuburbStats | null;
   prose: ReportProse;
   generatedAt: string; // ISO
 }
@@ -102,6 +104,10 @@ export const reportStyles = `
   .da-row .da-desc { font-size: 9pt; flex: 1; }
   .da-row.da-unavailable .da-desc { color: var(--muted); font-style: italic; }
   .da-overflow { font-size: 8.5pt; color: var(--muted); padding: 5px 0 0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 4px 0 10px; }
+  .stats-grid .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .stats-grid .v { font-size: 11pt; font-weight: 600; }
+  .stats-unavailable { font-size: 9pt; color: var(--muted); font-style: italic; padding: 6px 0; }
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
 `;
@@ -157,8 +163,55 @@ function daRow(da: RecentDA, index: number): ReactElement {
   );
 }
 
+function statCell(label: string, value: string): ReactElement {
+  return h(
+    'div',
+    { key: label },
+    h('div', { className: 'k' }, label),
+    h('div', { className: 'v num' }, value),
+  );
+}
+
+function renderSuburbMarket(
+  stats: SuburbStats | null,
+  blocks: ClaimBlock[] | undefined,
+): ReactElement {
+  const children: ReactElement[] = [h('h2', { key: 'h' }, 'Suburb market')];
+  children.push(...paragraphs(blocks));
+
+  if (stats === null) {
+    children.push(
+      h(
+        'div',
+        { key: 'unavailable', className: 'stats-unavailable' },
+        'Not enough recent comparable sales to summarise the suburb market.',
+      ),
+    );
+  } else {
+    children.push(
+      h(
+        'div',
+        { key: 'grid', className: 'stats-grid' },
+        statCell('Sample size', String(stats.sampleSize)),
+        statCell('Median sale price', formatValue(stats.medianSalePrice, 'currency-aud')),
+        statCell(
+          'Price range',
+          `${formatValue(stats.minSalePrice, 'currency-aud')} – ${formatValue(stats.maxSalePrice, 'currency-aud')}`,
+        ),
+        stats.medianBeds !== null ? statCell('Median beds', String(stats.medianBeds)) : null,
+        stats.medianBaths !== null ? statCell('Median baths', String(stats.medianBaths)) : null,
+        stats.mostRecentSaleDate !== null
+          ? statCell('Most recent sale', formatValue(stats.mostRecentSaleDate, 'date'))
+          : null,
+      ),
+    );
+  }
+
+  return h('section', { key: 'market' }, ...children);
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
-  const { subject, triangulation, prose, comparables, risks, recentDAs } = data;
+  const { subject, triangulation, prose, comparables, risks, recentDAs, suburbStats } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
   );
@@ -283,6 +336,8 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     ...compCards,
   );
 
+  const marketSection = renderSuburbMarket(suburbStats, prose.market);
+
   const riskSection = h(
     'section',
     { key: 'risks' },
@@ -336,6 +391,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     subjectSection,
     valuation,
     comparablesSection,
+    marketSection,
     riskSection,
     planningSection,
     footer,
