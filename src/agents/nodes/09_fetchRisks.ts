@@ -1,6 +1,8 @@
 // src/agents/nodes/09_fetchRisks.ts — Node 09 (CLAUDE.md §7.11 / spec §4).
-// Runs bushfire / heritage / flood lookups in parallel for NSW properties.
-// Non-NSW → three dataAvailable:false informational flags (v1 NSW-only).
+// Runs bushfire / heritage / flood lookups in parallel.
+//   NSW → NSW ArcGIS adapters (bushfire/heritage/flood via resolveLga).
+//   VIC → VIC Vicmap WFS adapters (statewide, no LGA needed).
+//   Other → three dataAvailable:false informational flags.
 // Missing resolvedAddress → in-band PARTIAL_DATA error.
 // Per-category failure → dataAvailable:false degrade flag + logger.warn.
 // null from bushfire/heritage (no intersect) → dataAvailable:true 'None identified.'
@@ -15,6 +17,9 @@ import { queryBushfire } from '@/tools/nsw-risk/bushfire';
 import { queryFlood } from '@/tools/nsw-risk/flood';
 import { queryHeritage } from '@/tools/nsw-risk/heritage';
 import { resolveLga } from '@/tools/nsw-risk/lga';
+import { queryVicBushfire } from '@/tools/vic-risk/bushfire';
+import { queryVicFlood } from '@/tools/vic-risk/flood';
+import { queryVicHeritage } from '@/tools/vic-risk/heritage';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,12 +49,12 @@ function noneFlag(category: RiskFlag['category']): RiskFlag {
   };
 }
 
-/** NSW-gate placeholder flag — risk data sources are NSW-only in v1. */
-function nswOnlyFlag(category: RiskFlag['category']): RiskFlag {
+/** Placeholder flag for states not yet covered (WA etc). */
+function unsupportedStateFlag(category: RiskFlag['category']): RiskFlag {
   return {
     category,
     severity: 'informational',
-    description: 'Risk data sources are NSW-only in v1.',
+    description: 'Risk data sources cover NSW and VIC in v1.',
     dataAvailable: false,
     sourceRef: null,
     evidence: null,
@@ -70,56 +75,95 @@ export async function fetchRisks(state: GraphState): Promise<Partial<GraphState>
 
   const { lat, lng, state: region } = state.resolvedAddress;
 
-  // NSW gate — VIC/WA risk sources not yet implemented
-  if (region !== 'NSW') {
-    return {
-      risks: [nswOnlyFlag('flood'), nswOnlyFlag('bushfire'), nswOnlyFlag('heritage')],
-    };
+  // --- VIC branch -----------------------------------------------------------
+  if (region === 'VIC') {
+    // Vicmap WFS is statewide — no LGA resolution needed
+    const [bushfireResult, heritageResult, floodResult] = await Promise.allSettled([
+      queryVicBushfire(lat, lng),
+      queryVicHeritage(lat, lng),
+      queryVicFlood(lat, lng),
+    ]);
+
+    let bushfireFlag: RiskFlag;
+    if (bushfireResult.status === 'rejected') {
+      logger.warn({ err: bushfireResult.reason }, 'fetchRisks(VIC): bushfire adapter failed');
+      bushfireFlag = degradeFlag('bushfire');
+    } else {
+      bushfireFlag = bushfireResult.value ?? noneFlag('bushfire');
+    }
+
+    let heritageFlag: RiskFlag;
+    if (heritageResult.status === 'rejected') {
+      logger.warn({ err: heritageResult.reason }, 'fetchRisks(VIC): heritage adapter failed');
+      heritageFlag = degradeFlag('heritage');
+    } else {
+      heritageFlag = heritageResult.value ?? noneFlag('heritage');
+    }
+
+    let floodFlag: RiskFlag;
+    if (floodResult.status === 'rejected') {
+      logger.warn({ err: floodResult.reason }, 'fetchRisks(VIC): flood adapter failed');
+      floodFlag = degradeFlag('flood');
+    } else {
+      floodFlag = floodResult.value ?? noneFlag('flood');
+    }
+
+    return { risks: [bushfireFlag, heritageFlag, floodFlag] };
   }
 
-  // Resolve LGA for flood coverage disambiguation (§3 of spec). A failure here MUST
-  // degrade, not crash the node: null → queryFlood's conservative branch
-  // (dataAvailable:false), never a false "no flood risk".
-  const lga = await resolveLga(lat, lng).catch((err: unknown) => {
-    logger.warn({ err }, 'fetchRisks: LGA resolution failed; using conservative flood branch');
-    return null;
-  });
+  // --- NSW branch -----------------------------------------------------------
+  if (region === 'NSW') {
+    // Resolve LGA for flood coverage disambiguation (§3 of spec). A failure here MUST
+    // degrade, not crash the node: null → queryFlood's conservative branch
+    // (dataAvailable:false), never a false "no flood risk".
+    const lga = await resolveLga(lat, lng).catch((err: unknown) => {
+      logger.warn({ err }, 'fetchRisks: LGA resolution failed; using conservative flood branch');
+      return null;
+    });
 
-  // Run all three in parallel; collect results without throwing
-  const [bushfireResult, heritageResult, floodResult] = await Promise.allSettled([
-    queryBushfire(lat, lng),
-    queryHeritage(lat, lng),
-    queryFlood(lat, lng, lga),
-  ]);
+    // Run all three in parallel; collect results without throwing
+    const [bushfireResult, heritageResult, floodResult] = await Promise.allSettled([
+      queryBushfire(lat, lng),
+      queryHeritage(lat, lng),
+      queryFlood(lat, lng, lga),
+    ]);
 
-  // --- bushfire ---
-  let bushfireFlag: RiskFlag;
-  if (bushfireResult.status === 'rejected') {
-    logger.warn({ err: bushfireResult.reason }, 'fetchRisks: bushfire adapter failed');
-    bushfireFlag = degradeFlag('bushfire');
-  } else {
-    bushfireFlag = bushfireResult.value ?? noneFlag('bushfire');
+    // --- bushfire ---
+    let bushfireFlag: RiskFlag;
+    if (bushfireResult.status === 'rejected') {
+      logger.warn({ err: bushfireResult.reason }, 'fetchRisks: bushfire adapter failed');
+      bushfireFlag = degradeFlag('bushfire');
+    } else {
+      bushfireFlag = bushfireResult.value ?? noneFlag('bushfire');
+    }
+
+    // --- heritage ---
+    let heritageFlag: RiskFlag;
+    if (heritageResult.status === 'rejected') {
+      logger.warn({ err: heritageResult.reason }, 'fetchRisks: heritage adapter failed');
+      heritageFlag = degradeFlag('heritage');
+    } else {
+      heritageFlag = heritageResult.value ?? noneFlag('heritage');
+    }
+
+    // --- flood (always returns a flag, never null) ---
+    let floodFlag: RiskFlag;
+    if (floodResult.status === 'rejected') {
+      logger.warn({ err: floodResult.reason }, 'fetchRisks: flood adapter failed');
+      floodFlag = degradeFlag('flood');
+    } else {
+      floodFlag = floodResult.value;
+    }
+
+    return { risks: [bushfireFlag, heritageFlag, floodFlag] };
   }
 
-  // --- heritage ---
-  let heritageFlag: RiskFlag;
-  if (heritageResult.status === 'rejected') {
-    logger.warn({ err: heritageResult.reason }, 'fetchRisks: heritage adapter failed');
-    heritageFlag = degradeFlag('heritage');
-  } else {
-    heritageFlag = heritageResult.value ?? noneFlag('heritage');
-  }
-
-  // --- flood (always returns a flag, never null) ---
-  let floodFlag: RiskFlag;
-  if (floodResult.status === 'rejected') {
-    logger.warn({ err: floodResult.reason }, 'fetchRisks: flood adapter failed');
-    floodFlag = degradeFlag('flood');
-  } else {
-    floodFlag = floodResult.value;
-  }
-
+  // --- Unsupported state (WA, etc.) -----------------------------------------
   return {
-    risks: [bushfireFlag, heritageFlag, floodFlag],
+    risks: [
+      unsupportedStateFlag('flood'),
+      unsupportedStateFlag('bushfire'),
+      unsupportedStateFlag('heritage'),
+    ],
   };
 }

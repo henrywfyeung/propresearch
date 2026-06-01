@@ -2,10 +2,12 @@
 // Unit tests for Node 09 fetchRisks and the annotation `risks` reducer.
 //
 // Covers (per task spec):
-//   - merges all 3 categories from the adapters
-//   - bushfire/heritage null → 'None identified.' informational flag
-//   - rejected adapter → dataAvailable:false degrade flag; other categories still present
-//   - NSW gate → 3 dataAvailable:false flags for non-NSW resolvedAddress
+//   - NSW path: merges all 3 categories from the adapters
+//   - NSW path: bushfire/heritage null → 'None identified.' informational flag
+//   - NSW path: rejected adapter → dataAvailable:false degrade flag
+//   - VIC path: calls VIC adapters; merges 3 categories
+//   - VIC path: null → 'None identified.'; rejected → degrade flag
+//   - WA/other → 3 dataAvailable:false flags with updated message
 //   - PARTIAL_DATA error when no resolvedAddress
 //   - annotation `risks` reducer merges by category (mirrors state-helpers.test.ts)
 
@@ -19,17 +21,31 @@ import { graphState } from '../fixtures/comps';
 // Mocks — hoisted so vi.mock factory can reference them
 // ---------------------------------------------------------------------------
 
-const { mockQueryBushfire, mockQueryHeritage, mockQueryFlood, mockResolveLga } = vi.hoisted(() => ({
+const {
+  mockQueryBushfire,
+  mockQueryHeritage,
+  mockQueryFlood,
+  mockResolveLga,
+  mockQueryVicBushfire,
+  mockQueryVicHeritage,
+  mockQueryVicFlood,
+} = vi.hoisted(() => ({
   mockQueryBushfire: vi.fn<() => Promise<RiskFlag | null>>(),
   mockQueryHeritage: vi.fn<() => Promise<RiskFlag | null>>(),
   mockQueryFlood: vi.fn<() => Promise<RiskFlag>>(),
   mockResolveLga: vi.fn<() => Promise<string | null>>(),
+  mockQueryVicBushfire: vi.fn<() => Promise<RiskFlag | null>>(),
+  mockQueryVicHeritage: vi.fn<() => Promise<RiskFlag | null>>(),
+  mockQueryVicFlood: vi.fn<() => Promise<RiskFlag | null>>(),
 }));
 
 vi.mock('@/tools/nsw-risk/bushfire', () => ({ queryBushfire: mockQueryBushfire }));
 vi.mock('@/tools/nsw-risk/heritage', () => ({ queryHeritage: mockQueryHeritage }));
 vi.mock('@/tools/nsw-risk/flood', () => ({ queryFlood: mockQueryFlood }));
 vi.mock('@/tools/nsw-risk/lga', () => ({ resolveLga: mockResolveLga }));
+vi.mock('@/tools/vic-risk/bushfire', () => ({ queryVicBushfire: mockQueryVicBushfire }));
+vi.mock('@/tools/vic-risk/heritage', () => ({ queryVicHeritage: mockQueryVicHeritage }));
+vi.mock('@/tools/vic-risk/flood', () => ({ queryVicFlood: mockQueryVicFlood }));
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -51,6 +67,16 @@ const VIC_ADDRESS = {
   postcode: '3000',
   state: 'VIC' as const,
   normalizedAddress: '1 Example St, Melbourne VIC 3000',
+};
+
+// WA is used to test the "unsupported state" path
+const WA_ADDRESS = {
+  lat: -31.95,
+  lng: 115.86,
+  suburb: 'Perth',
+  postcode: '6000',
+  state: 'WA' as const,
+  normalizedAddress: '1 Example St, Perth WA 6000',
 };
 
 const bushfireFlag: RiskFlag = {
@@ -105,6 +131,9 @@ beforeEach(() => {
   mockQueryFlood.mockReset();
   mockResolveLga.mockReset();
   mockResolveLga.mockResolvedValue('MOSMAN');
+  mockQueryVicBushfire.mockReset();
+  mockQueryVicHeritage.mockReset();
+  mockQueryVicFlood.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -123,12 +152,12 @@ describe('fetchRisks — no resolvedAddress', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test: NSW gate (non-NSW address)
+// Test: unsupported state (WA — neither NSW nor VIC)
 // ---------------------------------------------------------------------------
 
-describe('fetchRisks — non-NSW address (NSW gate)', () => {
-  it('returns 3 dataAvailable:false informational flags without calling adapters', async () => {
-    const state = graphState({ resolvedAddress: VIC_ADDRESS });
+describe('fetchRisks — unsupported state (WA)', () => {
+  it('returns 3 dataAvailable:false informational flags without calling any adapters', async () => {
+    const state = graphState({ resolvedAddress: WA_ADDRESS });
     const result = await fetchRisks(state);
 
     expect(result.errors).toBeUndefined();
@@ -140,14 +169,139 @@ describe('fetchRisks — non-NSW address (NSW gate)', () => {
     for (const flag of result.risks!) {
       expect(flag.dataAvailable).toBe(false);
       expect(flag.severity).toBe('informational');
-      expect(flag.description).toBe('Risk data sources are NSW-only in v1.');
+      expect(flag.description).toBe('Risk data sources cover NSW and VIC in v1.');
     }
 
-    // Adapters must NOT have been called
+    // No adapters called
+    expect(mockQueryBushfire).not.toHaveBeenCalled();
+    expect(mockQueryVicBushfire).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test: VIC branch — happy path + degrade
+// ---------------------------------------------------------------------------
+
+const vicBushfireFlag: RiskFlag = {
+  category: 'bushfire',
+  severity: 'high',
+  description: 'Bushfire Management Overlay',
+  dataAvailable: true,
+  sourceRef: {
+    provider: 'overlays',
+    endpoint: 'http://example/wfs',
+    fetchedAt: '2026-06-01T00:00:00.000Z',
+    path: '/risks/bushfire',
+  },
+  evidence: JSON.stringify({ bmo: { zone_description: 'Bushfire Management Overlay' } }),
+};
+
+const vicHeritageFlag: RiskFlag = {
+  category: 'heritage',
+  severity: 'high',
+  description: 'Royal Exhibition Building',
+  dataAvailable: true,
+  sourceRef: {
+    provider: 'overlays',
+    endpoint: 'http://example/wfs',
+    fetchedAt: '2026-06-01T00:00:00.000Z',
+    path: '/risks/heritage',
+  },
+  evidence: JSON.stringify({ vhr: { vhr_num: 'H0022' } }),
+};
+
+const vicFloodFlag: RiskFlag = {
+  category: 'flood',
+  severity: 'medium',
+  description: 'Land Subject to Inundation Overlay',
+  dataAvailable: true,
+  sourceRef: {
+    provider: 'overlays',
+    endpoint: 'http://example/wfs',
+    fetchedAt: '2026-06-01T00:00:00.000Z',
+    path: '/risks/flood',
+  },
+  evidence: JSON.stringify({ scheme_code: 'LSIO' }),
+};
+
+describe('fetchRisks — VIC, all adapters return flags', () => {
+  it('calls VIC adapters (not NSW) and merges all 3 categories', async () => {
+    mockQueryVicBushfire.mockResolvedValue(vicBushfireFlag);
+    mockQueryVicHeritage.mockResolvedValue(vicHeritageFlag);
+    mockQueryVicFlood.mockResolvedValue(vicFloodFlag);
+
+    const state = graphState({ resolvedAddress: VIC_ADDRESS });
+    const result = await fetchRisks(state);
+
+    expect(result.errors).toBeUndefined();
+    expect(result.risks).toHaveLength(3);
+
+    // VIC adapters called with the VIC coordinates
+    expect(mockQueryVicBushfire).toHaveBeenCalledWith(VIC_ADDRESS.lat, VIC_ADDRESS.lng);
+    expect(mockQueryVicHeritage).toHaveBeenCalledWith(VIC_ADDRESS.lat, VIC_ADDRESS.lng);
+    expect(mockQueryVicFlood).toHaveBeenCalledWith(VIC_ADDRESS.lat, VIC_ADDRESS.lng);
+
+    // NSW adapters NOT called
     expect(mockQueryBushfire).not.toHaveBeenCalled();
     expect(mockQueryHeritage).not.toHaveBeenCalled();
     expect(mockQueryFlood).not.toHaveBeenCalled();
+    // No LGA resolution for VIC (statewide WFS)
     expect(mockResolveLga).not.toHaveBeenCalled();
+
+    const byCategory = Object.fromEntries(result.risks!.map((r) => [r.category, r]));
+    expect(byCategory.bushfire).toMatchObject({ severity: 'high', dataAvailable: true });
+    expect(byCategory.heritage).toMatchObject({ severity: 'high', dataAvailable: true });
+    expect(byCategory.flood).toMatchObject({ severity: 'medium', dataAvailable: true });
+  });
+});
+
+describe('fetchRisks — VIC, null from adapters → noneFlag', () => {
+  it('bushfire null → "None identified." informational', async () => {
+    mockQueryVicBushfire.mockResolvedValue(null);
+    mockQueryVicHeritage.mockResolvedValue(vicHeritageFlag);
+    mockQueryVicFlood.mockResolvedValue(vicFloodFlag);
+
+    const state = graphState({ resolvedAddress: VIC_ADDRESS });
+    const result = await fetchRisks(state);
+
+    const bfFlag = result.risks!.find((r) => r.category === 'bushfire')!;
+    expect(bfFlag.dataAvailable).toBe(true);
+    expect(bfFlag.severity).toBe('informational');
+    expect(bfFlag.description).toBe('None identified.');
+  });
+
+  it('flood null → "None identified." informational (VIC flood is not always-non-null)', async () => {
+    mockQueryVicBushfire.mockResolvedValue(null);
+    mockQueryVicHeritage.mockResolvedValue(null);
+    mockQueryVicFlood.mockResolvedValue(null);
+
+    const state = graphState({ resolvedAddress: VIC_ADDRESS });
+    const result = await fetchRisks(state);
+
+    for (const flag of result.risks!) {
+      expect(flag.severity).toBe('informational');
+      expect(flag.description).toBe('None identified.');
+      expect(flag.dataAvailable).toBe(true);
+    }
+  });
+});
+
+describe('fetchRisks — VIC, adapter throws → degrade flag', () => {
+  it('bushfire throws → degrade; others still returned', async () => {
+    mockQueryVicBushfire.mockRejectedValue(new Error('WFS 503'));
+    mockQueryVicHeritage.mockResolvedValue(vicHeritageFlag);
+    mockQueryVicFlood.mockResolvedValue(vicFloodFlag);
+
+    const state = graphState({ resolvedAddress: VIC_ADDRESS });
+    const result = await fetchRisks(state);
+
+    expect(result.errors).toBeUndefined();
+    const bfFlag = result.risks!.find((r) => r.category === 'bushfire')!;
+    expect(bfFlag.dataAvailable).toBe(false);
+    expect(bfFlag.description).toBe('Risk data unavailable (source error).');
+
+    const htFlag = result.risks!.find((r) => r.category === 'heritage')!;
+    expect(htFlag.dataAvailable).toBe(true);
   });
 });
 
