@@ -10,6 +10,8 @@ function comp(overrides: Partial<Comparable> = {}): Comparable {
     salePrice: 1_000_000,
     contractDate: '2026-01-01',
     distanceM: 200,
+    lat: -33.82,
+    lng: 151.24,
     beds: 3,
     baths: 2,
     landArea: 500,

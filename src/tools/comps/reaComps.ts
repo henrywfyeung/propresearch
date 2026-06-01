@@ -79,6 +79,8 @@ export function toComparable(l: ReaSoldListing, subject: LatLng): Comparable | n
     salePrice,
     contractDate,
     distanceM: haversineMeters(subject, { lat: loc.latitude, lng: loc.longitude }),
+    lat: loc.latitude,
+    lng: loc.longitude,
     beds: g.bedrooms ?? 0,
     baths: g.bathrooms ?? 0,
     landArea: landToM2(l.landSize),

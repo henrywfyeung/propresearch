@@ -144,6 +144,8 @@ export function sampleComparable(id: string, over: Partial<Comparable> = {}): Co
     salePrice: 2_500_000,
     contractDate: '2026-03-01',
     distanceM: 300,
+    lat: -33.82,
+    lng: 151.24,
     beds: 3,
     baths: 2,
     landArea: 500,

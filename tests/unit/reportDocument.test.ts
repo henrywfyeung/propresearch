@@ -46,6 +46,7 @@ const data: ReportData = {
     ],
   },
   generatedAt: '2026-05-31T00:00:00.000Z',
+  staticMapDataUrl: null,
 };
 
 describe('renderReportHtml', () => {
@@ -305,5 +306,36 @@ describe('Suburb market rendering', () => {
     const riskIdx = html.indexOf('Risk register');
     expect(comparablesIdx).toBeLessThan(marketIdx);
     expect(marketIdx).toBeLessThan(riskIdx);
+  });
+});
+
+describe('Location map rendering', () => {
+  const MAP_DATA_URL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+  it('renders an <img> with the data URL when staticMapDataUrl is provided', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP_DATA_URL });
+    expect(html).toContain('<img');
+    expect(html).toContain(MAP_DATA_URL);
+  });
+
+  it('renders the Location section heading when a map is provided', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP_DATA_URL });
+    expect(html).toContain('Location');
+  });
+
+  it('renders no map <img> when staticMapDataUrl is null', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: null });
+    // Should not contain any data URL img
+    expect(html).not.toContain('data:image/png;base64,');
+  });
+
+  it('location section appears between subject and valuation when present', () => {
+    const html = renderReportHtml({ ...data, staticMapDataUrl: MAP_DATA_URL });
+    const subjectIdx = html.indexOf('Subject property');
+    const locationIdx = html.indexOf('Location');
+    const valuationIdx = html.indexOf('Valuation');
+    expect(subjectIdx).toBeLessThan(locationIdx);
+    expect(locationIdx).toBeLessThan(valuationIdx);
   });
 });

@@ -41,6 +41,8 @@ export interface ReportData {
   suburbStats: SuburbStats | null;
   prose: ReportProse;
   generatedAt: string; // ISO
+  /** Base64 data URL for the static location map, or null when unavailable. */
+  staticMapDataUrl: string | null;
 }
 
 const ACCENT = '#1F3864';
@@ -110,6 +112,8 @@ export const reportStyles = `
   .stats-unavailable { font-size: 9pt; color: var(--muted); font-style: italic; padding: 6px 0; }
   footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line);
     font-size: 7.5pt; color: var(--muted); display: flex; justify-content: space-between; }
+  .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
+  .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 4px; }
 `;
 
 function paragraphs(blocks: ClaimBlock[] | undefined): ReactElement[] {
@@ -211,7 +215,16 @@ function renderSuburbMarket(
 }
 
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
-  const { subject, triangulation, prose, comparables, risks, recentDAs, suburbStats } = data;
+  const {
+    subject,
+    triangulation,
+    prose,
+    comparables,
+    risks,
+    recentDAs,
+    suburbStats,
+    staticMapDataUrl: mapDataUrl,
+  } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
   );
@@ -383,12 +396,33 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     h('span', { className: 'num' }, formatValue(data.generatedAt, 'date')),
   );
 
+  // Location map section — only rendered when the data URL is present.
+  const locationSection =
+    mapDataUrl != null
+      ? h(
+          'section',
+          { key: 'location' },
+          h('h2', null, 'Location'),
+          h('img', {
+            src: mapDataUrl,
+            alt: 'Static location map showing subject property and comparable sales',
+            className: 'location-map',
+          }),
+          h(
+            'p',
+            { className: 'location-map-caption' },
+            'Navy pin — subject property. Grey pins — selected comparable sales.',
+          ),
+        )
+      : null;
+
   return h(
     'div',
     { className: 'doc' },
     masthead,
     summary,
     subjectSection,
+    locationSection,
     valuation,
     comparablesSection,
     marketSection,

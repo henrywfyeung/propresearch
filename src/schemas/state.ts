@@ -77,6 +77,8 @@ export const ComparableSchema = z.object({
   salePrice: z.number().positive(),
   contractDate: z.string(), // ISO date
   distanceM: z.number().nonnegative(),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
   beds: z.number().int().nonnegative(),
   baths: z.number().int().nonnegative(),
   landArea: z.number().nonnegative().nullable(),

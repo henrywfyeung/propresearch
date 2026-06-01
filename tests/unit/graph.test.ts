@@ -32,6 +32,9 @@ vi.mock('@/report/pdf', () => ({
 vi.mock('@/tools/storage/s3', () => ({
   uploadPdf: vi.fn().mockResolvedValue('reports/r1/v1.pdf'),
 }));
+vi.mock('@/tools/mapbox/staticMap', () => ({
+  staticMapDataUrl: vi.fn().mockResolvedValue(null),
+}));
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));

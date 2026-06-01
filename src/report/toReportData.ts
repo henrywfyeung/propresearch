@@ -31,5 +31,7 @@ export function toReportData(state: GraphState): ReportData | null {
     suburbStats: computeSuburbStats(state.comparables),
     prose: state.prose,
     generatedAt: new Date().toISOString(),
+    // Populated by the render node after fetching the static map.
+    staticMapDataUrl: null,
   };
 }
