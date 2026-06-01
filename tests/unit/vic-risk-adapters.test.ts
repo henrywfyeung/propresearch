@@ -164,7 +164,9 @@ const HERITAGE_VHR = {
       properties: {
         vhr_num: 'H0022',
         site_name: 'Royal Exhibition Building and Carlton Gardens',
-        hermes_num: '7680',
+        // The live WFS returns hermes_num as a NUMBER — use the real shape here
+        // so this test guards against the string-only schema regression.
+        hermes_num: 7680,
       },
     },
   ],
@@ -389,7 +391,7 @@ describe('queryVicHeritage — VHR → high', () => {
     const ev = JSON.parse(flag!.evidence!);
     expect(ev.vhr).toBeDefined();
     expect(ev.vhr.vhr_num).toBe('H0022');
-    expect(ev.vhr.hermes_num).toBe('7680');
+    expect(ev.vhr.hermes_num).toBe(7680);
     expect(ev.ho).toBeUndefined(); // HO not hit
   });
 });

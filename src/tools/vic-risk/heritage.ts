@@ -44,7 +44,8 @@ type HoOverlay = z.infer<typeof HoOverlaySchema>;
 const VhrSchema = z.object({
   vhr_num: z.string().nullable().optional(),
   site_name: z.string().nullable().optional(),
-  hermes_num: z.string().nullable().optional(),
+  // The live WFS returns hermes_num as a NUMBER (e.g. 228) — accept either form.
+  hermes_num: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 type VhrFeature = z.infer<typeof VhrSchema>;
