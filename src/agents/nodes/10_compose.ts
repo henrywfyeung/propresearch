@@ -58,8 +58,25 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
     demographics: state.demographics ?? null,
   };
 
+  // Planning (DA) coverage is NSW-only (Node 05). For other regions the empty
+  // DA list means "not queried", NOT "no activity" — so emit an honest note
+  // deterministically rather than letting the LLM infer a "stable area" from it.
+  const planningAvailable = resolvedAddress?.state === 'NSW';
+
   const entries = await Promise.all(
     SECTIONS.map(async (section): Promise<[ComposeSection, ClaimBlock[]]> => {
+      if (section === 'planning' && !planningAvailable) {
+        const region = resolvedAddress?.state ?? 'this region';
+        return [
+          section,
+          [
+            {
+              type: 'text',
+              text: `Development-application data is not available for ${region} properties in this version — planning-activity coverage is currently limited to NSW. The absence of listed applications here reflects that coverage gap, not evidence of low development activity nearby; check the local council or planning authority directly.`,
+            },
+          ],
+        ];
+      }
       const out = await callWithFallback({
         model: process.env.OPENAI_MODEL_COMPOSE ?? '',
         schema: TextBlocksSchema,

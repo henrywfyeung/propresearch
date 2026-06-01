@@ -4,7 +4,7 @@ import type { RecentDA, RiskFlag } from '@/schemas/state';
 import { callWithFallback } from '@/tools/llm/structuredCall';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // tests/unit/compose.test.ts
-import { graphState, sampleComparable } from '../fixtures/comps';
+import { graphState, sampleComparable, sampleResolvedAddress } from '../fixtures/comps';
 
 vi.mock('@/tools/llm/structuredCall', () => ({ callWithFallback: vi.fn() }));
 const mockLlm = vi.mocked(callWithFallback);
@@ -85,6 +85,26 @@ describe('compose', () => {
       expect(first.sourceRef.path).toBe('/triangulation/reconciled');
     }
     expect(mockLlm).toHaveBeenCalledTimes(7);
+  });
+
+  it('emits a deterministic "not available" planning note for non-NSW regions (no LLM for planning)', async () => {
+    const state = graphState({
+      resolvedAddress: { ...sampleResolvedAddress, state: 'VIC', suburb: 'Richmond' },
+      comparables: [sampleComparable('a', { selection: 'fair-value', adjustedValue: 1_200_000 })],
+      triangulation: tri,
+      // empty DA list — for VIC this means "not queried", not "no activity"
+      market: { suburbStats: null, recentNews: [], recentDAs: [] },
+    });
+    const out = await compose(state);
+    const planning = out.prose?.planning;
+    expect(planning?.[0]?.type).toBe('text');
+    const text = planning?.[0]?.type === 'text' ? planning[0].text : '';
+    expect(text).toContain('VIC');
+    expect(text).toMatch(/not available|coverage/i);
+    // must NOT infer stability from the empty list (the bad-run phrasing)
+    expect(text).not.toMatch(/stable local|minimal disruption|suggests.*stable/i);
+    // planning skipped the LLM → only the other 6 sections called it
+    expect(mockLlm).toHaveBeenCalledTimes(6);
   });
 
   it('risks section messages include the risk category and severity', () => {
