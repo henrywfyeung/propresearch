@@ -114,6 +114,15 @@ export const SuburbDemographicsSchema = z.object({
   avgHouseholdSize: z.number().nullable(),
   ownerOccupiedPct: z.number().nullable(),
   rentedPct: z.number().nullable(),
+  // % of occupied dwellings owned WITH a mortgage (mortgage indebtedness).
+  ownedWithMortgagePct: z.number().nullable(),
+  // % rented from a state/territory housing authority or community provider
+  // (social / public / "commission" housing).
+  socialHousingPct: z.number().nullable(),
+  // ABS SEIFA IRSAD: socio-economic advantage/disadvantage. Decile 1 (most
+  // disadvantaged) – 10 (most advantaged), Australia-wide; score (mean ~1000).
+  seifaIrsadDecile: z.number().nullable(),
+  seifaIrsadScore: z.number().nullable(),
   censusYear: z.number(),
 });
 export type SuburbDemographics = z.infer<typeof SuburbDemographicsSchema>;

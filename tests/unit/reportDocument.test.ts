@@ -332,6 +332,10 @@ describe('Demographics block rendering', () => {
     avgHouseholdSize: 2.4,
     ownerOccupiedPct: 72.1,
     rentedPct: 22.3,
+    ownedWithMortgagePct: 28.5,
+    socialHousingPct: 1.2,
+    seifaIrsadDecile: 10,
+    seifaIrsadScore: 1158,
   };
 
   it('renders the demographics label with SA2 name and census year when demographics is non-null', () => {
@@ -351,6 +355,16 @@ describe('Demographics block rendering', () => {
     expect(html).toContain('72.1%');
     expect(html).toContain('Median rent');
     expect(html).toContain('/wk');
+  });
+
+  it('renders the neighbourhood-profile stats (SEIFA, social housing, mortgage, renter)', () => {
+    const html = renderReportHtml({ ...data, demographics: sampleDemographics });
+    expect(html).toContain('Socio-economic (SEIFA)');
+    expect(html).toContain('10/10'); // IRSAD decile
+    expect(html).toContain('Renter-occupied (investor)');
+    expect(html).toContain('Owned with mortgage');
+    expect(html).toContain('Social / public housing');
+    expect(html).toContain('1.2%'); // social housing %
   });
 
   it('omits the demographics block when demographics is null', () => {
@@ -383,6 +397,10 @@ describe('Demographics block rendering', () => {
       avgHouseholdSize: null,
       ownerOccupiedPct: null,
       rentedPct: null,
+      ownedWithMortgagePct: null,
+      socialHousingPct: null,
+      seifaIrsadDecile: null,
+      seifaIrsadScore: null,
     };
     // Should not throw, and SA2 Demographics label should not render (no cells)
     expect(() => renderReportHtml({ ...data, demographics: partial })).not.toThrow();

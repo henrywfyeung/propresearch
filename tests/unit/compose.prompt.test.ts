@@ -115,6 +115,10 @@ describe('compose prompt', () => {
       avgHouseholdSize: 2.4,
       ownerOccupiedPct: 72.1,
       rentedPct: 22.3,
+      ownedWithMortgagePct: 28.5,
+      socialHousingPct: 1.2,
+      seifaIrsadDecile: 10,
+      seifaIrsadScore: 1158,
     };
     const msgs = buildMessages('market', { ...input, demographics: demo });
     expect(msgs[1]?.content).toContain('Demographics');

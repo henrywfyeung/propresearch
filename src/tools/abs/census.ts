@@ -209,6 +209,11 @@ const G37AttributesSchema = z.object({
   O_MTG_Total: z.number().optional(),
   r_tot_total: z.number().optional(),
   R_Tot_Total: z.number().optional(),
+  // social housing: rented from a state/territory housing authority + community provider
+  r_st_h_auth_total: z.number().optional(),
+  R_St_H_Auth_Total: z.number().optional(),
+  r_com_hp_total: z.number().optional(),
+  R_Com_HP_Total: z.number().optional(),
   total_total: z.number().optional(),
   Total_Total: z.number().optional(),
 });
@@ -217,13 +222,26 @@ const G37ResponseSchema = z.object({
   features: z.array(z.object({ attributes: G37AttributesSchema })),
 });
 
-type TenureResult = Pick<SuburbDemographics, 'ownerOccupiedPct' | 'rentedPct'>;
+type TenureResult = Pick<
+  SuburbDemographics,
+  'ownerOccupiedPct' | 'rentedPct' | 'ownedWithMortgagePct' | 'socialHousingPct'
+>;
+
+const EMPTY_TENURE: TenureResult = {
+  ownerOccupiedPct: null,
+  rentedPct: null,
+  ownedWithMortgagePct: null,
+  socialHousingPct: null,
+};
 
 async function fetchTenure(sa2Code: string): Promise<TenureResult> {
   const base = censusArcgisBase();
   const url = new URL(`${base}/ABS_2021_Census_G37_SA2/FeatureServer/0/query`);
   url.searchParams.set('where', `SA2_CODE_2021='${sa2Code}'`);
-  url.searchParams.set('outFields', 'O_OR_Total,O_MTG_Total,R_Tot_Total,Total_Total');
+  url.searchParams.set(
+    'outFields',
+    'O_OR_Total,O_MTG_Total,R_Tot_Total,R_St_H_Auth_Total,R_Com_HP_Total,Total_Total',
+  );
   url.searchParams.set('returnGeometry', 'false');
   url.searchParams.set('f', 'json');
 
@@ -231,26 +249,72 @@ async function fetchTenure(sa2Code: string): Promise<TenureResult> {
   const parsed = G37ResponseSchema.safeParse(raw);
   if (!parsed.success) {
     logger.warn({ sa2Code, issues: parsed.error.issues }, 'abs G37 schema mismatch');
-    return { ownerOccupiedPct: null, rentedPct: null };
+    return EMPTY_TENURE;
   }
 
   const attrs = parsed.data.features[0]?.attributes;
-  if (!attrs) return { ownerOccupiedPct: null, rentedPct: null };
+  if (!attrs) return EMPTY_TENURE;
 
   // Handle both lowercase (live) and titlecase (potential future change).
   const ownedOutright = attrs.o_or_total ?? attrs.O_OR_Total ?? 0;
   const ownedMortgage = attrs.o_mtg_total ?? attrs.O_MTG_Total ?? 0;
   const rented = attrs.r_tot_total ?? attrs.R_Tot_Total ?? 0;
+  const stateHousing = attrs.r_st_h_auth_total ?? attrs.R_St_H_Auth_Total ?? 0;
+  const communityHousing = attrs.r_com_hp_total ?? attrs.R_Com_HP_Total ?? 0;
   const total = attrs.total_total ?? attrs.Total_Total ?? 0;
 
-  if (total === 0) {
-    // Guard divide-by-zero.
-    return { ownerOccupiedPct: null, rentedPct: null };
-  }
+  if (total === 0) return EMPTY_TENURE; // guard divide-by-zero
 
+  const pct = (n: number) => Math.round((n / total) * 1000) / 10;
   return {
-    ownerOccupiedPct: Math.round(((ownedOutright + ownedMortgage) / total) * 1000) / 10,
-    rentedPct: Math.round((rented / total) * 1000) / 10,
+    ownerOccupiedPct: pct(ownedOutright + ownedMortgage),
+    rentedPct: pct(rented),
+    ownedWithMortgagePct: pct(ownedMortgage),
+    socialHousingPct: pct(stateHousing + communityHousing),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// ArcGIS SEIFA — socio-economic index (IRSAD decile + score), by SA2.
+// Attributes come back lowercase (confirmed live: irsad_aus_decile, irsad_score).
+// ---------------------------------------------------------------------------
+
+const SeifaAttributesSchema = z.object({
+  irsad_aus_decile: z.number().optional(),
+  IRSAD_AUS_Decile: z.number().optional(),
+  irsad_score: z.number().optional(),
+  IRSAD_Score: z.number().optional(),
+});
+const SeifaResponseSchema = z.object({
+  features: z.array(z.object({ attributes: SeifaAttributesSchema })),
+});
+
+type SeifaResult = Pick<SuburbDemographics, 'seifaIrsadDecile' | 'seifaIrsadScore'>;
+
+async function fetchSeifa(sa2Code: string): Promise<SeifaResult> {
+  const base = censusArcgisBase();
+  const url = new URL(
+    `${base}/ABS_Socio_Economic_Indexes_for_Areas_SEIFA_by_2021_SA2/FeatureServer/0/query`,
+  );
+  url.searchParams.set('where', `SA2_CODE_2021='${sa2Code}'`);
+  url.searchParams.set('outFields', 'IRSAD_AUS_Decile,IRSAD_Score');
+  url.searchParams.set('returnGeometry', 'false');
+  url.searchParams.set('f', 'json');
+
+  const raw = await fetchJson(url.toString());
+  const parsed = SeifaResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    logger.warn({ sa2Code, issues: parsed.error.issues }, 'abs SEIFA schema mismatch');
+    return { seifaIrsadDecile: null, seifaIrsadScore: null };
+  }
+  const attrs = parsed.data.features[0]?.attributes;
+  if (!attrs) return { seifaIrsadDecile: null, seifaIrsadScore: null };
+
+  const decile = attrs.irsad_aus_decile ?? attrs.IRSAD_AUS_Decile ?? null;
+  const score = attrs.irsad_score ?? attrs.IRSAD_Score ?? null;
+  return {
+    seifaIrsadDecile: decile,
+    seifaIrsadScore: score != null ? Math.round(score) : null,
   };
 }
 
@@ -270,13 +334,15 @@ export async function fetchCensusDemographics(
 ): Promise<Partial<SuburbDemographics>> {
   const sdmxUrl = `${sdmxBase()}/data/ABS,C21_G02_SA2,1.0.0/.${sa2Code}.SA2.?dimensionAtObservation=AllDimensions`;
 
-  const [mediansResult, populationResult, tenureResult] = await Promise.allSettled([
+  const [mediansResult, populationResult, tenureResult, seifaResult] = await Promise.allSettled([
     // 1. SDMX-CSV medians
     fetchText(sdmxUrl, { Accept: 'application/vnd.sdmx.data+csv' }).then(parseSdmxCsv),
     // 2. ArcGIS G01 — population
     fetchPopulation(sa2Code),
-    // 3. ArcGIS G37 — tenure
+    // 3. ArcGIS G37 — tenure (owner/renter/mortgage/social housing)
     fetchTenure(sa2Code),
+    // 4. ArcGIS SEIFA — socio-economic index
+    fetchSeifa(sa2Code),
   ]);
 
   const merged: Partial<SuburbDemographics> = {};
@@ -297,6 +363,12 @@ export async function fetchCensusDemographics(
     Object.assign(merged, tenureResult.value);
   } else {
     logger.warn({ sa2Code, err: tenureResult.reason }, 'abs census G37 call failed');
+  }
+
+  if (seifaResult.status === 'fulfilled') {
+    Object.assign(merged, seifaResult.value);
+  } else {
+    logger.warn({ sa2Code, err: seifaResult.reason }, 'abs census SEIFA call failed');
   }
 
   return merged;

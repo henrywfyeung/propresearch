@@ -269,9 +269,22 @@ function renderDemographicsBlock(demo: SuburbDemographics): ReactElement {
           `${formatValue(demo.medianHouseholdIncomeWeekly, 'currency-aud')}/wk`,
         )
       : null,
+    demo.seifaIrsadDecile !== null
+      ? demoCell('Socio-economic (SEIFA)', `${demo.seifaIrsadDecile}/10`)
+      : null,
     demo.ownerOccupiedPct !== null ? demoCell('Owner-occupied', `${demo.ownerOccupiedPct}%`) : null,
+    demo.rentedPct !== null ? demoCell('Renter-occupied (investor)', `${demo.rentedPct}%`) : null,
+    demo.ownedWithMortgagePct !== null
+      ? demoCell('Owned with mortgage', `${demo.ownedWithMortgagePct}%`)
+      : null,
+    demo.socialHousingPct !== null
+      ? demoCell('Social / public housing', `${demo.socialHousingPct}%`)
+      : null,
     demo.medianRentWeekly !== null
       ? demoCell('Median rent', `${formatValue(demo.medianRentWeekly, 'currency-aud')}/wk`)
+      : null,
+    demo.medianMortgageMonthly !== null
+      ? demoCell('Median mortgage', `${formatValue(demo.medianMortgageMonthly, 'currency-aud')}/mo`)
       : null,
     demo.avgHouseholdSize !== null
       ? demoCell('Avg household size', String(demo.avgHouseholdSize))

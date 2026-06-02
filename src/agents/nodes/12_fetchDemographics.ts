@@ -45,6 +45,10 @@ export async function fetchDemographics(state: GraphState): Promise<Partial<Grap
       avgHouseholdSize: null,
       ownerOccupiedPct: null,
       rentedPct: null,
+      ownedWithMortgagePct: null,
+      socialHousingPct: null,
+      seifaIrsadDecile: null,
+      seifaIrsadScore: null,
       ...census,
     },
   };

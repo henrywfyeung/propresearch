@@ -66,12 +66,18 @@ const MOSMAN_G37_RESPONSE = {
     {
       attributes: {
         o_or_total: 2320,
-        o_mtg_total: 1431,
+        o_mtg_total: 1431, // owned with mortgage → 1431/5710 = 25.1%
         r_tot_total: 1784,
+        r_st_h_auth_total: 171, // state housing
+        r_com_hp_total: 57, // community housing → social = 228/5710 = 4.0%
         total_total: 5710,
       },
     },
   ],
+};
+
+const MOSMAN_SEIFA_RESPONSE = {
+  features: [{ attributes: { irsad_aus_decile: 9, irsad_score: 1085.4 } }],
 };
 
 const G37_ZERO_TOTAL_RESPONSE = {
@@ -123,6 +129,19 @@ function handleG37(sa2Code: string, body: object, status = 200) {
   });
 }
 
+function handleSeifa(sa2Code: string, body: object, status = 200) {
+  return http.get(
+    `${ARCGIS_BASE}/ABS_Socio_Economic_Indexes_for_Areas_SEIFA_by_2021_SA2/FeatureServer/0/query`,
+    ({ request }) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get('where')?.includes(sa2Code)) {
+        return HttpResponse.json(body, { status });
+      }
+      return HttpResponse.json({ features: [] });
+    },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -133,6 +152,7 @@ describe('fetchCensusDemographics — SDMX CSV parsing', () => {
       handleSdmx(MOSMAN_SA2, MOSMAN_SDMX_CSV),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -156,6 +176,7 @@ describe('fetchCensusDemographics — SDMX CSV parsing', () => {
       handleSdmx(MOSMAN_SA2, csvUnknownOnly),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -173,6 +194,7 @@ describe('fetchCensusDemographics — G01 population', () => {
       handleSdmx(MOSMAN_SA2, MOSMAN_SDMX_CSV),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -187,6 +209,7 @@ describe('fetchCensusDemographics — G37 tenure', () => {
       handleSdmx(MOSMAN_SA2, MOSMAN_SDMX_CSV),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -195,6 +218,13 @@ describe('fetchCensusDemographics — G37 tenure', () => {
     expect(result.ownerOccupiedPct).toBe(65.7);
     // 1784 / 5710 * 100 = 31.2%
     expect(result.rentedPct).toBe(31.2);
+    // 1431 / 5710 * 100 = 25.1% owned with mortgage (indebtedness)
+    expect(result.ownedWithMortgagePct).toBe(25.1);
+    // (171 + 57) / 5710 * 100 = 4.0% social / public housing
+    expect(result.socialHousingPct).toBe(4);
+    // SEIFA IRSAD decile + score flow through
+    expect(result.seifaIrsadDecile).toBe(9);
+    expect(result.seifaIrsadScore).toBe(1085); // rounded from 1085.4
   });
 
   it('returns null for tenure fields when total_total is 0 (divide-by-zero guard)', async () => {
@@ -239,6 +269,7 @@ describe('fetchCensusDemographics — per-sub-call degradation', () => {
       handleSdmx(MOSMAN_SA2, MOSMAN_SDMX_CSV),
       handleG01(MOSMAN_SA2, { error: 'server error' }, 503),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -253,6 +284,7 @@ describe('fetchCensusDemographics — per-sub-call degradation', () => {
       handleSdmx(MOSMAN_SA2, '', 503),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
@@ -280,6 +312,7 @@ describe('fetchCensusDemographics — happy path returns all fields', () => {
       handleSdmx(MOSMAN_SA2, MOSMAN_SDMX_CSV),
       handleG01(MOSMAN_SA2, MOSMAN_G01_RESPONSE),
       handleG37(MOSMAN_SA2, MOSMAN_G37_RESPONSE),
+      handleSeifa(MOSMAN_SA2, MOSMAN_SEIFA_RESPONSE),
     );
 
     const result = await fetchCensusDemographics(MOSMAN_SA2);
