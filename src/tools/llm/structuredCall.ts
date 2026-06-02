@@ -97,9 +97,14 @@ function extractResponsesText(resp: { output_text?: string; output?: unknown }):
   return part?.text ?? '';
 }
 
-async function runOpenAiReasoning(
+/** Max gpt-5.4 reasoning attempts (1 initial + retries). */
+const REASONING_MAX_ATTEMPTS = 3;
+
+/** One create-and-poll of a background reasoning job; throws on timeout / non-completion. */
+async function runOpenAiReasoningOnce(
   model: string,
   opts: StructuredCallOpts<unknown>,
+  timeoutMs: number,
 ): Promise<ModelResult<unknown>> {
   const client = getOpenAi();
   const input = opts.messages.map((m) => ({
@@ -115,14 +120,11 @@ async function runOpenAiReasoning(
     text: { format: zodTextFormat(opts.schema, 'structured_output') },
     background: true,
   });
-  // Polls a background job (not a held connection). Default 280s stays < Vercel
-  // Pro's 300s function limit for the webapp/Inngest path; OPENAI_RESPONSES_TIMEOUT_MS
-  // lets non-Vercel callers (e.g. the standalone run-report-live CLI) extend it,
-  // since high-effort gpt-5.4 reasoning occasionally exceeds 280s (tail latency).
-  const timeoutMs = Number(process.env.OPENAI_RESPONSES_TIMEOUT_MS) || 280_000;
   const deadline = Date.now() + timeoutMs;
   while (resp.status === 'queued' || resp.status === 'in_progress') {
     if (Date.now() > deadline) {
+      // Abandon the stalled job (best-effort cancel) before retrying fresh.
+      await client.responses.cancel(resp.id).catch(() => {});
       throw new Error(`OpenAI Responses timed out (status=${resp.status}, id=${resp.id})`);
     }
     await sleep(2500);
@@ -140,6 +142,38 @@ async function runOpenAiReasoning(
       completionTokens: resp.usage?.output_tokens ?? 0,
     },
   };
+}
+
+/**
+ * gpt-5.4 reasoning via the Responses API (background mode), with retries.
+ *
+ * High-effort jobs occasionally stall; rather than fail over to another provider
+ * (which needs a separate key + cost), we abandon a stalled poll and issue a
+ * FRESH request — a new job almost always completes quickly. This targets the
+ * real failure (a stuck job, not a broken provider). A shorter per-ATTEMPT
+ * deadline is intentional: it abandons a stall sooner, then retries.
+ *
+ * Per-attempt deadline default 280s stays < Vercel Pro's 300s function limit;
+ * OPENAI_RESPONSES_TIMEOUT_MS overrides it for non-Vercel callers (the CLI).
+ */
+async function runOpenAiReasoning(
+  model: string,
+  opts: StructuredCallOpts<unknown>,
+): Promise<ModelResult<unknown>> {
+  const perAttemptMs = Number(process.env.OPENAI_RESPONSES_TIMEOUT_MS) || 280_000;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= REASONING_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await runOpenAiReasoningOnce(model, opts, perAttemptMs);
+    } catch (err) {
+      lastErr = err;
+      logger.warn(
+        { attempt, maxAttempts: REASONING_MAX_ATTEMPTS, model, err: String(err) },
+        'OpenAI reasoning attempt failed; retrying with a fresh request',
+      );
+    }
+  }
+  throw lastErr;
 }
 
 async function defaultModelRunner(
@@ -204,7 +238,8 @@ async function recordCall(
   if (ctx) ctx.costUsd += costUsd;
 }
 
-/** Single-provider structured call (OpenAI by default). pRetry lives in the model. */
+/** Single-provider structured call (OpenAI). Retries live in the runner (reasoning
+ *  path retries a fresh Responses job; Chat path uses ChatOpenAI maxRetries). */
 export async function structuredCall<T>(opts: StructuredCallOpts<T>): Promise<T> {
   const started = Date.now();
   const { parsed, usage } = await modelRunner('openai', opts.model, opts);
