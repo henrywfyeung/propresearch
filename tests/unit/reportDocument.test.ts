@@ -32,6 +32,7 @@ const data: ReportData = {
   demographics: null,
   schools: [],
   hospitals: [],
+  planningControls: null,
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -177,7 +178,7 @@ describe('Planning activity rendering', () => {
 
   it('renders Planning activity heading', () => {
     const html = renderReportHtml({ ...data, recentDAs: [daFull] });
-    expect(html).toContain('Planning activity');
+    expect(html).toContain('Planning &amp; zoning');
   });
 
   it('renders DA description, distance, and status chip', () => {
@@ -213,7 +214,7 @@ describe('Planning activity rendering', () => {
 
   it('renders empty-state message when recentDAs is empty', () => {
     const html = renderReportHtml({ ...data, recentDAs: [] });
-    expect(html).toContain('Planning activity');
+    expect(html).toContain('Planning &amp; zoning');
     expect(html).toContain('No recent development applications found nearby');
     expect(html).toContain('unavailable');
   });
@@ -789,5 +790,40 @@ describe('Map pin legend rendering', () => {
     expect(html).toContain('Childcare &amp; early education');
     expect(html).toContain('#e08e0b'); // amber
     expect(html).not.toContain('Hospitals &amp; medical');
+  });
+});
+
+describe('Planning controls (zoning + overlays) rendering', () => {
+  it('renders zone code + cleaned description + overlays when present', () => {
+    const html = renderReportHtml({
+      ...data,
+      planningControls: {
+        zoneCode: 'NRZ1',
+        zoneDescription: 'NEIGHBOURHOOD RESIDENTIAL ZONE - SCHEDULE 1',
+        overlays: [
+          { code: 'HO332', description: 'Heritage Overlay' },
+          { code: 'DCPO1', description: 'Development Contributions Plan Overlay' },
+        ],
+      },
+    });
+    expect(html).toContain('class="zoning-block"');
+    expect(html).toContain('NRZ1');
+    expect(html).toContain('Neighbourhood Residential Zone'); // ALL-CAPS → cleaned
+    expect(html).toContain('HO332');
+    expect(html).toContain('DCPO1');
+  });
+
+  it('renders a NSW zone with no overlays', () => {
+    const html = renderReportHtml({
+      ...data,
+      planningControls: { zoneCode: 'R3', zoneDescription: 'Medium Density Residential', overlays: [] },
+    });
+    expect(html).toContain('R3');
+    expect(html).toContain('Medium Density Residential');
+  });
+
+  it('omits the zoning block when planningControls is null', () => {
+    const html = renderReportHtml({ ...data, planningControls: null });
+    expect(html).not.toContain('class="zoning-block"');
   });
 });

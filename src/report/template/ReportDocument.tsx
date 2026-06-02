@@ -20,6 +20,7 @@ import {
   schoolStyle,
 } from '@/report/mapMarkers';
 import { formatValue, renderClaim } from '@/report/renderClaim';
+import type { PlanningControls } from '@/tools/planning/zoning';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
@@ -56,6 +57,8 @@ export interface ReportData {
   schools: NearbyFacility[];
   /** Nearby hospitals / medical facilities (Geoscience Australia). */
   hospitals: NearbyPlace[];
+  /** Subject's residential zoning + planning overlays, or null. */
+  planningControls: PlanningControls | null;
   prose: ReportProse;
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
@@ -143,6 +146,11 @@ export const reportStyles = `
     font-size: 8.5pt; padding: 1px 0; }
   .school-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .school-dist { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .zoning-block { margin: 0 0 8px; }
+  .zone-row { display: flex; gap: 10px; font-size: 9pt; padding: 2px 0; align-items: baseline; }
+  .zone-label { flex: none; width: 64px; font-size: 7.5pt; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); }
+  .zone-val { flex: 1; font-weight: 600; }
   .da-overflow { font-size: 8.5pt; color: var(--muted); padding: 5px 0 0; }
   .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 4px 0 10px; }
   .stats-grid .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -596,6 +604,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     demographics,
     schools,
     hospitals,
+    planningControls,
     staticMapDataUrl: mapDataUrl,
     mapHref,
     photos,
@@ -750,7 +759,49 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
 
   const displayDAs = recentDAs.slice(0, DA_DISPLAY_MAX);
   const overflowCount = recentDAs.length - displayDAs.length;
-  const planningChildren: ReactElement[] = [h('h2', { key: 'ph' }, 'Planning activity')];
+  const planningChildren: ReactElement[] = [h('h2', { key: 'ph' }, 'Planning & zoning')];
+  // Zoning + overlays block (from fetchZoning), above the DA prose.
+  if (planningControls && (planningControls.zoneCode || planningControls.overlays.length > 0)) {
+    const pc = planningControls;
+    const zoneRows: ReactElement[] = [];
+    if (pc.zoneCode) {
+      zoneRows.push(
+        h(
+          'div',
+          { key: 'zone', className: 'zone-row' },
+          h('span', { className: 'zone-label' }, 'Zone'),
+          h(
+            'span',
+            { className: 'zone-val' },
+            pc.zoneDescription
+              ? `${pc.zoneCode} — ${cleanFacilityName(pc.zoneDescription)}`
+              : pc.zoneCode,
+          ),
+        ),
+      );
+    }
+    if (pc.overlays.length > 0) {
+      zoneRows.push(
+        h(
+          'div',
+          { key: 'overlays', className: 'zone-row' },
+          h('span', { className: 'zone-label' }, 'Overlays'),
+          h(
+            'span',
+            { className: 'zone-val' },
+            pc.overlays
+              .map((o) =>
+                o.description && o.description !== o.code
+                  ? `${o.code} (${cleanFacilityName(o.description)})`
+                  : o.code,
+              )
+              .join('; '),
+          ),
+        ),
+      );
+    }
+    planningChildren.push(h('div', { key: 'zoning', className: 'zoning-block' }, ...zoneRows));
+  }
   planningChildren.push(...paragraphs(prose.planning));
   if (recentDAs.length === 0) {
     planningChildren.push(

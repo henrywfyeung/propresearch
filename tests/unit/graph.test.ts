@@ -46,6 +46,9 @@ vi.mock('@/tools/schools/ga', () => ({
   fetchNearbyFacilities: vi.fn().mockResolvedValue([]),
   fetchNearbyHospitals: vi.fn().mockResolvedValue([]),
 }));
+vi.mock('@/tools/planning/zoning', () => ({
+  fetchPlanningControls: vi.fn().mockResolvedValue({ zoneCode: null, zoneDescription: null, overlays: [] }),
+}));
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));

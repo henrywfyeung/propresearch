@@ -4,6 +4,7 @@
 
 import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
+import type { PlanningControls } from '@/tools/planning/zoning';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type {
   Comparable,
@@ -54,6 +55,10 @@ export const GraphAnnotation = Annotation.Root({
   hospitals: Annotation<NearbyPlace[]>({
     reducer: (_c, u) => u,
     default: () => [],
+  }),
+  planningControls: Annotation<PlanningControls | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
   }),
   prose: Annotation<ReportProse>({
     reducer: (cur, inc) => ({ ...cur, ...inc }),
