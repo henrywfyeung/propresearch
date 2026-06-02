@@ -89,6 +89,20 @@ describe('staticMapDataUrl', () => {
     expect(url).not.toContain('school');
   });
 
+  it('adds red hospital-glyph markers when hospitals are provided', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS, [], [{ lat: -33.83, lng: 151.25 }]);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).toContain('pin-s-hospital+c0392b');
+  });
+
+  it('omits hospital markers when none are provided', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS, [{ lat: -33.83, lng: 151.25 }]);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('hospital');
+  });
+
   it('includes "auto" for auto-fit viewport', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS);

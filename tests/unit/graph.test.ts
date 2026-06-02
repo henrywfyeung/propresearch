@@ -42,7 +42,10 @@ vi.mock('@/tools/mapbox/staticMap', () => ({
   staticMapDataUrl: vi.fn().mockResolvedValue(null),
   interactiveMapHref: vi.fn().mockReturnValue('https://www.google.com/maps/search/?api=1&query=0,0'),
 }));
-vi.mock('@/tools/schools/ga', () => ({ fetchNearbyFacilities: vi.fn().mockResolvedValue([]) }));
+vi.mock('@/tools/schools/ga', () => ({
+  fetchNearbyFacilities: vi.fn().mockResolvedValue([]),
+  fetchNearbyHospitals: vi.fn().mockResolvedValue([]),
+}));
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));

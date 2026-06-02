@@ -30,14 +30,16 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
       label: String(i + 1),
     }));
 
-    // Nearest schools as green markers (state.schools is sorted nearest-first;
-    // staticMap caps the count).
+    // Nearest schools (green) + hospitals (red) as markers (both sorted
+    // nearest-first; staticMap caps each).
     const schoolMarkers = (state.schools ?? []).map((s) => ({ lat: s.lat, lng: s.lng }));
+    const hospitalMarkers = (state.hospitals ?? []).map((hp) => ({ lat: hp.lat, lng: hp.lng }));
 
     data.staticMapDataUrl = await staticMapDataUrl(
       { lat: addr.lat, lng: addr.lng },
       mapComps,
       schoolMarkers,
+      hospitalMarkers,
     );
   }
 

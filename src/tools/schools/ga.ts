@@ -15,6 +15,10 @@ import { z } from 'zod';
 
 const GA_EDUCATION_URL =
   'https://services.ga.gov.au/gis/rest/services/Foundation_Facilities_Points/MapServer/0/query';
+// Layer 1 = Health_and_Medical_Facilities; main_function ∈ {Hospital, Aged Care
+// Facility, Nursing Home, …} → we filter to Hospital.
+const GA_HEALTH_URL =
+  'https://services.ga.gov.au/gis/rest/services/Foundation_Facilities_Points/MapServer/1/query';
 
 export type FacilityType = 'primary' | 'secondary' | 'combined' | 'early-education' | 'school';
 
@@ -60,17 +64,28 @@ const GaQueryResponse = z.object({
     .nullish(),
 });
 
+/** A located place (name + coords + straight-line distance from the subject). */
+export interface NearbyPlace {
+  name: string;
+  lat: number;
+  lng: number;
+  distanceM: number;
+}
+
 /**
- * Fetch education facilities within `radiusM` of `subject`, classified by type
- * and sorted nearest-first. Returns [] on any failure (graceful degradation).
- * Coordinates come back as WGS84 (outSR=4326): geometry.x = lng, y = lat.
+ * Shared GA ArcGIS point near-query → places sorted nearest-first. Returns [] on
+ * any failure (graceful degradation). Coordinates are WGS84 (outSR=4326).
  */
-export async function fetchNearbyFacilities(
+async function queryGaPoints(
+  layerUrl: string,
   subject: LatLng,
-  radiusM = 2000,
-): Promise<NearbyFacility[]> {
-  const url = new URL(GA_EDUCATION_URL);
+  radiusM: number,
+  where: string,
+  logName: string,
+): Promise<NearbyPlace[]> {
+  const url = new URL(layerUrl);
   url.search = new URLSearchParams({
+    where,
     geometry: `${subject.lng},${subject.lat}`,
     geometryType: 'esriGeometryPoint',
     inSR: '4326',
@@ -86,28 +101,50 @@ export async function fetchNearbyFacilities(
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) {
-      logger.warn({ status: res.status }, 'fetchNearbyFacilities: GA returned non-2xx');
+      logger.warn({ status: res.status }, `${logName}: GA returned non-2xx`);
       return [];
     }
     const parsed = GaQueryResponse.parse(await res.json());
-    const out: NearbyFacility[] = [];
+    const out: NearbyPlace[] = [];
     for (const f of parsed.features ?? []) {
       const name = f.attributes.name?.trim();
       if (!name || !f.geometry) continue;
-      if (isTertiary(name)) continue; // exclude TAFE/university/etc.
       const lat = f.geometry.y;
       const lng = f.geometry.x;
-      out.push({
-        name,
-        type: classifyFacility(name),
-        lat,
-        lng,
-        distanceM: Math.round(haversineMeters(subject, { lat, lng })),
-      });
+      out.push({ name, lat, lng, distanceM: Math.round(haversineMeters(subject, { lat, lng })) });
     }
     return out.sort((a, b) => a.distanceM - b.distanceM);
   } catch (err) {
-    logger.warn({ err: String(err) }, 'fetchNearbyFacilities: GA fetch failed');
+    logger.warn({ err: String(err) }, `${logName}: GA fetch failed`);
     return [];
   }
+}
+
+/**
+ * Education facilities within `radiusM`, classified by type, sorted nearest-first.
+ * Tertiary (TAFE/university/etc.) is excluded.
+ */
+export async function fetchNearbyFacilities(
+  subject: LatLng,
+  radiusM = 2000,
+): Promise<NearbyFacility[]> {
+  const places = await queryGaPoints(GA_EDUCATION_URL, subject, radiusM, '1=1', 'fetchNearbyFacilities');
+  return places
+    .filter((p) => !isTertiary(p.name))
+    .map((p) => ({ ...p, type: classifyFacility(p.name) }));
+}
+
+/**
+ * Hospitals within `radiusM` (default 5km — hospitals are sparser than schools),
+ * sorted nearest-first. Uses GA's `main_function = 'Hospital'` classification
+ * (excludes aged-care / nursing homes).
+ */
+export async function fetchNearbyHospitals(subject: LatLng, radiusM = 5000): Promise<NearbyPlace[]> {
+  return queryGaPoints(
+    GA_HEALTH_URL,
+    subject,
+    radiusM,
+    "main_function = 'Hospital'",
+    'fetchNearbyHospitals',
+  );
 }

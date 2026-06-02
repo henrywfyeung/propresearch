@@ -4,7 +4,7 @@
 
 import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
-import type { NearbyFacility } from '@/tools/schools/ga';
+import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type {
   Comparable,
   MarketContext,
@@ -48,6 +48,10 @@ export const GraphAnnotation = Annotation.Root({
     default: () => null,
   }),
   schools: Annotation<NearbyFacility[]>({
+    reducer: (_c, u) => u,
+    default: () => [],
+  }),
+  hospitals: Annotation<NearbyPlace[]>({
     reducer: (_c, u) => u,
     default: () => [],
   }),

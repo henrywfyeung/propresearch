@@ -31,6 +31,7 @@ const data: ReportData = {
   suburbStats: null,
   demographics: null,
   schools: [],
+  hospitals: [],
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -699,25 +700,34 @@ describe('Schools & early education rendering', () => {
     distanceM,
   });
 
-  it('renders schools grouped by type with cleaned names + source caveat', () => {
+  it('renders schools + hospitals grouped, with cleaned names + source caveat', () => {
     const schools = [
       fac('RICHMOND PRIMARY SCHOOL', 'primary', 700),
       fac('RICHMOND HIGH SCHOOL - GRIFFITHS STREET CAMPUS', 'secondary', 1050),
       fac('LITTLE STARS EARLY LEARNING CENTRE', 'early-education', 300),
     ];
-    const html = renderReportHtml({ ...data, schools });
-    expect(html).toContain('Schools &amp; early education'); // heading (& escaped)
+    const hospitals = [{ name: 'EPWORTH RICHMOND', lat: -37.82, lng: 144.99, distanceM: 774 }];
+    const html = renderReportHtml({ ...data, schools, hospitals });
+    expect(html).toContain('Schools &amp; hospitals'); // heading flips when hospitals present
     expect(html).toContain('Primary');
     expect(html).toContain('Secondary');
     expect(html).toContain('Early education');
+    expect(html).toContain('Hospitals &amp; medical'); // hospital group
     expect(html).toContain('Richmond Primary School'); // ALL-CAPS → title-cased
     expect(html).toContain('Richmond High School – Griffiths Street Campus'); // dash segments joined
+    expect(html).toContain('Epworth Richmond'); // hospital, title-cased
     expect(html).toContain('Geoscience Australia');
     expect(html).toContain('ACECQA'); // childcare-completeness caveat
   });
 
-  it('omits the section entirely when there are no schools', () => {
-    const html = renderReportHtml({ ...data, schools: [] });
-    expect(html).not.toContain('Schools &amp; early education');
+  it('uses the schools-only heading when there are no hospitals', () => {
+    const html = renderReportHtml({ ...data, schools: [fac('X PRIMARY SCHOOL', 'primary', 500)], hospitals: [] });
+    expect(html).toContain('Schools &amp; early education');
+    expect(html).not.toContain('Hospitals &amp; medical');
+  });
+
+  it('omits the section entirely when there are no schools or hospitals', () => {
+    const html = renderReportHtml({ ...data, schools: [], hospitals: [] });
+    expect(html).not.toContain('Schools &amp;');
   });
 });

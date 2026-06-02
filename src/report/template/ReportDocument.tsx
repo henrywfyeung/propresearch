@@ -11,7 +11,7 @@
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { selectedMapComps } from '@/report/mapComps';
 import { formatValue, renderClaim } from '@/report/renderClaim';
-import type { NearbyFacility } from '@/tools/schools/ga';
+import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { SubjectVision } from '@/schemas/vision';
@@ -45,6 +45,8 @@ export interface ReportData {
   demographics: SuburbDemographics | null;
   /** Nearby schools + early-education facilities (Geoscience Australia). */
   schools: NearbyFacility[];
+  /** Nearby hospitals / medical facilities (Geoscience Australia). */
+  hospitals: NearbyPlace[];
   prose: ReportProse;
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
@@ -463,42 +465,52 @@ const SCHOOL_GROUPS: { type: NearbyFacility['type']; label: string; cap: number 
   { type: 'school', label: 'Other schools', cap: 3 },
 ];
 
-/**
- * "Schools & early education" section — nearest facilities grouped by type with
- * straight-line distance. Returns null when no facilities are available.
- */
-function renderSchools(schools: NearbyFacility[]): ReactElement | null {
-  if (!schools.length) return null;
-
-  const groups = SCHOOL_GROUPS.flatMap(({ type, label, cap }) => {
-    const items = schools.filter((s) => s.type === type).slice(0, cap);
-    if (!items.length) return [];
-    return [
+// Render one labelled group of place-rows (name + straight-line distance).
+function schoolGroup(
+  key: string,
+  label: string,
+  items: { name: string; distanceM: number }[],
+): ReactElement | null {
+  if (!items.length) return null;
+  return h(
+    'div',
+    { key, className: 'school-group' },
+    h('div', { className: 'school-group-label' }, label),
+    ...items.map((s, i) =>
       h(
         'div',
-        { key: type, className: 'school-group' },
-        h('div', { className: 'school-group-label' }, label),
-        ...items.map((s, i) =>
-          h(
-            'div',
-            { key: `${type}-${i}`, className: 'school-row' },
-            h('span', { className: 'school-name' }, cleanFacilityName(s.name)),
-            h('span', { className: 'school-dist num' }, formatValue(s.distanceM, 'distance-m')),
-          ),
-        ),
+        { key: `${key}-${i}`, className: 'school-row' },
+        h('span', { className: 'school-name' }, cleanFacilityName(s.name)),
+        h('span', { className: 'school-dist num' }, formatValue(s.distanceM, 'distance-m')),
       ),
-    ];
-  });
+    ),
+  );
+}
+
+/**
+ * "Schools & hospitals" section — nearest schools (grouped by type) + nearest
+ * hospitals/medical, with straight-line distance. Returns null when nothing
+ * nearby is available.
+ */
+function renderSchools(schools: NearbyFacility[], hospitals: NearbyPlace[]): ReactElement | null {
+  if (!schools.length && !hospitals.length) return null;
+
+  const groups = SCHOOL_GROUPS.map(({ type, label, cap }) =>
+    schoolGroup(type, label, schools.filter((s) => s.type === type).slice(0, cap)),
+  );
+  // Hospitals last — GA's "Hospital" class is broad (incl. clinics/imaging), so
+  // label it "Hospitals & medical" and show the nearest few.
+  groups.push(schoolGroup('hospitals', 'Hospitals & medical', hospitals.slice(0, 5)));
 
   return h(
     'section',
     { key: 'schools' },
-    h('h2', null, 'Schools & early education'),
-    h('div', { className: 'schools-grid' }, ...groups),
+    h('h2', null, hospitals.length ? 'Schools & hospitals' : 'Schools & early education'),
+    h('div', { className: 'schools-grid' }, ...groups.filter(Boolean)),
     h(
       'p',
       { className: 'src' },
-      'Source: Geoscience Australia (Education Facilities), straight-line distance. Early-education coverage is indicative — check the ACECQA national register for the complete childcare list.',
+      'Source: Geoscience Australia (Education + Health facilities), straight-line distance. Early-education coverage is indicative — check the ACECQA national register for the complete childcare list.',
     ),
   );
 }
@@ -514,6 +526,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     suburbStats,
     demographics,
     schools,
+    hospitals,
     staticMapDataUrl: mapDataUrl,
     mapHref,
     photos,
@@ -656,7 +669,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   );
 
   const marketSection = renderSuburbMarket(suburbStats, prose.market, demographics);
-  const schoolsSection = renderSchools(schools);
+  const schoolsSection = renderSchools(schools, hospitals);
 
   const riskSection = h(
     'section',
@@ -758,6 +771,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
               ? 'Navy home pin marks the subject property; numbered pins mark comparable sales (keyed below, with sale prices).'
               : 'Navy home pin marks the subject property.',
             schools.length > 0 ? ' Green pins mark nearby schools.' : '',
+            hospitals.length > 0 ? ' Red pins mark hospitals.' : '',
             mapHref ? ' Click the map to open it interactively (satellite, Street View, directions).' : '',
           ),
           mapLegend,

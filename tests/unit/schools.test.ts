@@ -1,7 +1,12 @@
 // tests/unit/schools.test.ts — GA Education_Facilities adapter: name→type
 // classification, tertiary exclusion, and the spatial near-query parsing.
 
-import { classifyFacility, fetchNearbyFacilities, isTertiary } from '@/tools/schools/ga';
+import {
+  classifyFacility,
+  fetchNearbyFacilities,
+  fetchNearbyHospitals,
+  isTertiary,
+} from '@/tools/schools/ga';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('classifyFacility', () => {
@@ -80,5 +85,36 @@ describe('fetchNearbyFacilities', () => {
   it('returns [] when fetch throws', async () => {
     vi.mocked(global.fetch).mockRejectedValueOnce(new Error('network'));
     expect(await fetchNearbyFacilities(SUBJECT)).toEqual([]);
+  });
+});
+
+describe('fetchNearbyHospitals', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns hospital places sorted nearest-first (no type classification)', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      gaResponse([
+        { name: 'FAR HOSPITAL', x: 145.04, y: -37.86 },
+        { name: 'EPWORTH RICHMOND', x: 144.996, y: -37.824 },
+      ]),
+    );
+    const out = await fetchNearbyHospitals(SUBJECT, 5000);
+    expect(out.map((h) => h.name)).toEqual(['EPWORTH RICHMOND', 'FAR HOSPITAL']);
+    expect(out[0]).not.toHaveProperty('type'); // hospitals are plain places
+  });
+
+  it('sends a main_function=Hospital filter to GA', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(gaResponse([]));
+    await fetchNearbyHospitals(SUBJECT);
+    const url = String(vi.mocked(global.fetch).mock.calls[0]?.[0]);
+    // URLSearchParams encodes spaces as '+', which decodeURIComponent leaves as-is.
+    const decoded = decodeURIComponent(url).replace(/\+/g, ' ');
+    expect(decoded).toContain("main_function = 'Hospital'");
+  });
+
+  it('returns [] on failure', async () => {
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('network'));
+    expect(await fetchNearbyHospitals(SUBJECT)).toEqual([]);
   });
 });
