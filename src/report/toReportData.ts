@@ -34,6 +34,7 @@ export function toReportData(state: GraphState): ReportData | null {
     schools: state.schools ?? [],
     hospitals: state.hospitals ?? [],
     planningControls: state.planningControls ?? null,
+    proximityHazards: state.proximityHazards ?? null,
     prose: state.prose,
     generatedAt: new Date().toISOString(),
     // Populated by the render node after fetching the static map.

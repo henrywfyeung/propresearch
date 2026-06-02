@@ -25,6 +25,7 @@ const NODE_ORDER = [
   'fetchDemographics',
   'fetchSchools',
   'fetchZoning',
+  'fetchProximity',
   'reasonAndSelect',
   'triangulate',
   'compose',

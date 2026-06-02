@@ -21,6 +21,7 @@ import {
 } from '@/report/mapMarkers';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { PlanningControls } from '@/tools/planning/zoning';
+import type { ProximityHazards } from '@/tools/proximity/proximity';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
@@ -59,6 +60,8 @@ export interface ReportData {
   hospitals: NearbyPlace[];
   /** Subject's residential zoning + planning overlays, or null. */
   planningControls: PlanningControls | null;
+  /** Nearest transmission line + freeway, or null. */
+  proximityHazards: ProximityHazards | null;
   prose: ReportProse;
   generatedAt: string; // ISO
   /** Base64 data URL for the static location map, or null when unavailable. */
@@ -592,6 +595,54 @@ function renderPinLegend(
   return h('div', { className: 'pin-legend' }, ...items);
 }
 
+/**
+ * "Proximity & infrastructure" — nearest high-voltage transmission line + freeway
+ * (negative-externality proximity). Returns null when neither is nearby.
+ */
+function renderProximity(p: ProximityHazards | null): ReactElement | null {
+  if (!p || (!p.transmissionLine && !p.freeway)) return null;
+  const rows: ReactElement[] = [];
+  if (p.transmissionLine) {
+    rows.push(
+      h(
+        'div',
+        { key: 'tx', className: 'zone-row' },
+        h('span', { className: 'zone-label' }, 'Power line'),
+        h(
+          'span',
+          { className: 'zone-val' },
+          `${p.transmissionLine.label} — ${formatValue(p.transmissionLine.distanceM, 'distance-m')} away`,
+        ),
+      ),
+    );
+  }
+  if (p.freeway) {
+    rows.push(
+      h(
+        'div',
+        { key: 'fw', className: 'zone-row' },
+        h('span', { className: 'zone-label' }, 'Freeway'),
+        h(
+          'span',
+          { className: 'zone-val' },
+          `${p.freeway.label} — ${formatValue(p.freeway.distanceM, 'distance-m')} away`,
+        ),
+      ),
+    );
+  }
+  return h(
+    'section',
+    { key: 'proximity' },
+    h('h2', null, 'Proximity & infrastructure'),
+    h('div', { className: 'zoning-block' }, ...rows),
+    h(
+      'p',
+      { className: 'src' },
+      'Nearest high-voltage transmission line (Geoscience Australia) and freeway (OpenStreetMap); straight-line distance.',
+    ),
+  );
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const {
     subject,
@@ -605,6 +656,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     schools,
     hospitals,
     planningControls,
+    proximityHazards,
     staticMapDataUrl: mapDataUrl,
     mapHref,
     photos,
@@ -748,6 +800,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
 
   const marketSection = renderSuburbMarket(suburbStats, prose.market, demographics);
   const schoolsSection = renderSchools(schools, hospitals);
+  const proximitySection = renderProximity(proximityHazards);
 
   const riskSection = h(
     'section',
@@ -906,6 +959,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     subjectSection,
     locationSection,
     schoolsSection,
+    proximitySection,
     visualInspectionSection,
     valuation,
     comparablesSection,

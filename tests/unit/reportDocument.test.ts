@@ -33,6 +33,7 @@ const data: ReportData = {
   schools: [],
   hospitals: [],
   planningControls: null,
+  proximityHazards: null,
   prose: {
     summary: [{ type: 'text', text: 'Summary narrative for the dossier goes here.' }],
     valuation: [
@@ -825,5 +826,27 @@ describe('Planning controls (zoning + overlays) rendering', () => {
   it('omits the zoning block when planningControls is null', () => {
     const html = renderReportHtml({ ...data, planningControls: null });
     expect(html).not.toContain('class="zoning-block"');
+  });
+});
+
+describe('Proximity & infrastructure rendering', () => {
+  it('renders nearest transmission line + freeway with distances + sources', () => {
+    const html = renderReportHtml({
+      ...data,
+      proximityHazards: {
+        transmissionLine: { distanceM: 496, label: '66 kV · Richmond to North Richmond', lat: -37.8, lng: 144.9 },
+        freeway: { distanceM: 184, label: 'M1', lat: -37.8, lng: 144.9 },
+      },
+    });
+    expect(html).toContain('Proximity &amp; infrastructure');
+    expect(html).toContain('66 kV');
+    expect(html).toContain('Power line');
+    expect(html).toContain('M1');
+    expect(html).toContain('Geoscience Australia');
+  });
+
+  it('omits the proximity section when there is nothing nearby', () => {
+    const html = renderReportHtml({ ...data, proximityHazards: null });
+    expect(html).not.toContain('Proximity &amp; infrastructure');
   });
 });

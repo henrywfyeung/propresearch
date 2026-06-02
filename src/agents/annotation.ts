@@ -5,6 +5,7 @@
 import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
 import type { PlanningControls } from '@/tools/planning/zoning';
+import type { ProximityHazards } from '@/tools/proximity/proximity';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type {
   Comparable,
@@ -57,6 +58,10 @@ export const GraphAnnotation = Annotation.Root({
     default: () => [],
   }),
   planningControls: Annotation<PlanningControls | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
+  }),
+  proximityHazards: Annotation<ProximityHazards | null>({
     reducer: (_c, u) => u,
     default: () => null,
   }),
