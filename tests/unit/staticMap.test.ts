@@ -72,34 +72,33 @@ describe('staticMapDataUrl', () => {
     expect(url).not.toContain('pin-s+5b6573'); // labelled → medium, not small
   });
 
-  it('adds green school-glyph markers when schools are provided', async () => {
+  it('renders distinct category pins per glyph + colour (primary/secondary/childcare/hospital)', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS, [
-      { lat: -33.83, lng: 151.25 },
-      { lat: -33.81, lng: 151.23 },
+      { lat: -33.83, lng: 151.25, glyph: 'school', color: '2e8b57' }, // primary
+      { lat: -33.82, lng: 151.24, glyph: 'college', color: '2c6fb0' }, // secondary
+      { lat: -33.81, lng: 151.23, glyph: 'playground', color: 'e08e0b' }, // childcare
+      { lat: -33.84, lng: 151.26, glyph: 'hospital', color: 'c0392b' }, // hospital
     ]);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
     expect(url).toContain('pin-s-school+2e8b57');
+    expect(url).toContain('pin-s-college+2c6fb0');
+    expect(url).toContain('pin-s-playground+e08e0b');
+    expect(url).toContain('pin-s-hospital+c0392b');
   });
 
-  it('omits school markers when none are provided', async () => {
+  it('renders a plain pin when a category marker has no glyph', async () => {
+    mockFetchOk();
+    await staticMapDataUrl(SUBJECT, COMPS, [{ lat: -33.83, lng: 151.25, glyph: '', color: 'e08e0b' }]);
+    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
+    expect(url).toContain('pin-s+e08e0b');
+  });
+
+  it('omits category markers when none are provided', async () => {
     mockFetchOk();
     await staticMapDataUrl(SUBJECT, COMPS);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
     expect(url).not.toContain('school');
-  });
-
-  it('adds red hospital-glyph markers when hospitals are provided', async () => {
-    mockFetchOk();
-    await staticMapDataUrl(SUBJECT, COMPS, [], [{ lat: -33.83, lng: 151.25 }]);
-    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
-    expect(url).toContain('pin-s-hospital+c0392b');
-  });
-
-  it('omits hospital markers when none are provided', async () => {
-    mockFetchOk();
-    await staticMapDataUrl(SUBJECT, COMPS, [{ lat: -33.83, lng: 151.25 }]);
-    const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
     expect(url).not.toContain('hospital');
   });
 

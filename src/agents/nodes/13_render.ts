@@ -5,6 +5,7 @@ import type { GraphState } from '@/agents/annotation';
 import { logger } from '@/lib/observability/logger';
 import { fetchImagesAsDataUrls } from '@/report/fetchImages';
 import { selectedMapComps } from '@/report/mapComps';
+import { EARLY_ED_STYLE, HOSPITAL_STYLE, schoolStyle } from '@/report/mapMarkers';
 import { renderReportPdf } from '@/report/pdf';
 import { renderReportHtml } from '@/report/render';
 import { toReportData } from '@/report/toReportData';
@@ -30,17 +31,29 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
       label: String(i + 1),
     }));
 
-    // Nearest schools (green) + hospitals (red) as markers (both sorted
-    // nearest-first; staticMap caps each).
-    const schoolMarkers = (state.schools ?? []).map((s) => ({ lat: s.lat, lng: s.lng }));
-    const hospitalMarkers = (state.hospitals ?? []).map((hp) => ({ lat: hp.lat, lng: hp.lng }));
+    // Category markers, distinct per type (primary green / secondary blue /
+    // childcare amber / hospital red). state.schools is sorted nearest-first;
+    // take the nearest few PER category so each type is represented but the map
+    // stays readable.
+    const used = new Map<string, number>();
+    const schoolMarkers = (state.schools ?? []).flatMap((s) => {
+      const st = schoolStyle(s.type);
+      const cap = st === EARLY_ED_STYLE ? 2 : 3;
+      const n = used.get(st.color) ?? 0;
+      if (n >= cap) return [];
+      used.set(st.color, n + 1);
+      return [{ lat: s.lat, lng: s.lng, glyph: st.glyph, color: st.color }];
+    });
+    // Hospitals within 3km only (a far hospital would zoom the map right out).
+    const hospitalMarkers = (state.hospitals ?? [])
+      .filter((hp) => hp.distanceM <= 3000)
+      .slice(0, 3)
+      .map((hp) => ({ lat: hp.lat, lng: hp.lng, glyph: HOSPITAL_STYLE.glyph, color: HOSPITAL_STYLE.color }));
 
-    data.staticMapDataUrl = await staticMapDataUrl(
-      { lat: addr.lat, lng: addr.lng },
-      mapComps,
-      schoolMarkers,
-      hospitalMarkers,
-    );
+    data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, mapComps, [
+      ...schoolMarkers,
+      ...hospitalMarkers,
+    ]);
   }
 
   // Download listing photos + floor plans as base64 data URLs so Puppeteer doesn't

@@ -681,7 +681,6 @@ describe('Map legend rendering', () => {
     expect(html).toContain('5/116 Belmont Road');
     expect(html).toContain('1,805,000');
     expect(html).toContain('1,325,000');
-    expect(html).toContain('keyed below');
   });
 
   it('omits the legend when there are no selected comps', () => {
@@ -729,5 +728,48 @@ describe('Schools & early education rendering', () => {
   it('omits the section entirely when there are no schools or hospitals', () => {
     const html = renderReportHtml({ ...data, schools: [], hospitals: [] });
     expect(html).not.toContain('Schools &amp;');
+  });
+});
+
+describe('Map pin legend rendering', () => {
+  const MAP =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const fac = (type: NearbyFacility['type']): NearbyFacility => ({
+    name: `${type} school`,
+    type,
+    lat: -37.82,
+    lng: 144.99,
+    distanceM: 500,
+  });
+
+  it('shows a pin swatch + label for each present category (and hides absent ones)', () => {
+    const html = renderReportHtml({
+      ...data,
+      staticMapDataUrl: MAP,
+      schools: [fac('primary'), fac('secondary')], // no childcare here
+      hospitals: [{ name: 'Epworth', lat: -37.82, lng: 144.99, distanceM: 700 }],
+    });
+    expect(html).toContain('class="pin-legend"');
+    expect(html).toContain('class="pin-swatch"'); // SVG pin samples, not a text sentence
+    expect(html).toContain('Subject property');
+    expect(html).toContain('Primary schools');
+    expect(html).toContain('Secondary schools');
+    expect(html).toContain('Hospitals &amp; medical');
+    expect(html).not.toContain('Childcare &amp; early education'); // absent category hidden
+    // swatch colours match the map marker palette
+    expect(html).toContain('#2e8b57'); // primary green
+    expect(html).toContain('#2c6fb0'); // secondary blue
+  });
+
+  it('shows the childcare swatch only when early-education facilities exist', () => {
+    const html = renderReportHtml({
+      ...data,
+      staticMapDataUrl: MAP,
+      schools: [fac('early-education')],
+      hospitals: [],
+    });
+    expect(html).toContain('Childcare &amp; early education');
+    expect(html).toContain('#e08e0b'); // amber
+    expect(html).not.toContain('Hospitals &amp; medical');
   });
 });

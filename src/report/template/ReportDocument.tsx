@@ -10,6 +10,15 @@
 
 import { priceChartSvg } from '@/report/charts/priceChart';
 import { selectedMapComps } from '@/report/mapComps';
+import {
+  COMP_STYLE,
+  EARLY_ED_STYLE,
+  HOSPITAL_STYLE,
+  PRIMARY_STYLE,
+  SECONDARY_STYLE,
+  SUBJECT_STYLE,
+  schoolStyle,
+} from '@/report/mapMarkers';
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
@@ -154,6 +163,10 @@ export const reportStyles = `
     border-radius: 50%; background: #5b6573; color: #fff; font-size: 7pt; font-weight: 600; }
   .map-legend-addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .map-legend-price { color: var(--accent); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pin-legend { display: flex; flex-wrap: wrap; gap: 3px 14px; margin: 2px 0 6px; }
+  .pin-legend-item { display: inline-flex; align-items: center; gap: 4px; font-size: 8pt; color: var(--ink); }
+  .pin-swatch { flex: none; }
+  .pin-legend-label { white-space: nowrap; }
   .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 12px; }
   .photo-grid img { width: 100%; height: 52mm; object-fit: cover; border-radius: 3px; border: 1px solid var(--line); display: block; }
   .condition-chip { display: inline-block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .09em;
@@ -515,6 +528,49 @@ function renderSchools(schools: NearbyFacility[], hospitals: NearbyPlace[]): Rea
   );
 }
 
+// A small teardrop pin swatch (colour matches the map marker) for the legend.
+function pinSwatch(color: string): ReactElement {
+  return h(
+    'svg',
+    { className: 'pin-swatch', viewBox: '0 0 16 22', width: 12, height: 17 },
+    h('path', {
+      d: 'M8 0C3.58 0 0 3.58 0 8c0 5.4 8 14 8 14s8-8.6 8-14C16 3.58 12.42 0 8 0z',
+      fill: `#${color}`,
+    }),
+    h('circle', { cx: 8, cy: 8, r: 3, fill: '#ffffff' }),
+  );
+}
+
+function pinLegendItem(color: string, label: string): ReactElement {
+  return h(
+    'span',
+    { key: label, className: 'pin-legend-item' },
+    pinSwatch(color),
+    h('span', { className: 'pin-legend-label' }, label),
+  );
+}
+
+/**
+ * Visual key for the map pins — a pin swatch + label per present category, so
+ * the reader can tell primary / secondary / childcare / hospital apart (rather
+ * than a sentence). Subject (home pin) and numbered comps are always shown.
+ */
+function renderPinLegend(
+  schools: NearbyFacility[],
+  hospitals: NearbyPlace[],
+  hasComps: boolean,
+): ReactElement {
+  const items: ReactElement[] = [pinLegendItem(SUBJECT_STYLE.color, SUBJECT_STYLE.label)];
+  if (hasComps) items.push(pinLegendItem(COMP_STYLE.color, COMP_STYLE.label));
+  for (const st of [PRIMARY_STYLE, SECONDARY_STYLE, EARLY_ED_STYLE]) {
+    if (schools.some((s) => schoolStyle(s.type) === st)) {
+      items.push(pinLegendItem(st.color, st.label));
+    }
+  }
+  if (hospitals.length) items.push(pinLegendItem(HOSPITAL_STYLE.color, HOSPITAL_STYLE.label));
+  return h('div', { className: 'pin-legend' }, ...items);
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const {
     subject,
@@ -764,17 +820,15 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
                 mapImage,
               )
             : mapImage,
-          h(
-            'p',
-            { className: 'location-map-caption' },
-            legendComps.length > 0
-              ? 'Navy home pin marks the subject property; numbered pins mark comparable sales (keyed below, with sale prices).'
-              : 'Navy home pin marks the subject property.',
-            schools.length > 0 ? ' Green pins mark nearby schools.' : '',
-            hospitals.length > 0 ? ' Red pins mark hospitals.' : '',
-            mapHref ? ' Click the map to open it interactively (satellite, Street View, directions).' : '',
-          ),
+          renderPinLegend(schools, hospitals, legendComps.length > 0),
           mapLegend,
+          mapHref
+            ? h(
+                'p',
+                { className: 'location-map-caption' },
+                'Click the map to open it interactively (satellite, Street View, directions).',
+              )
+            : null,
         )
       : null;
 

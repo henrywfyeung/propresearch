@@ -12,15 +12,8 @@ const MAX_COMP_MARKERS = 15;
 /** Comp pin colour — dark slate for legible white numerals on the colour base. */
 const COMP_PIN_COLOR = '5b6573';
 
-/** Max school markers on the map; nearest-first, kept small so it stays readable. */
-const MAX_SCHOOL_MARKERS = 6;
-/** School pin colour — green, distinct from the navy subject + slate comps. */
-const SCHOOL_PIN_COLOR = '2e8b57';
-
-/** Max hospital markers; sparser than schools, nearest-first. */
-const MAX_HOSPITAL_MARKERS = 4;
-/** Hospital pin colour — red, distinct from navy/slate/green. */
-const HOSPITAL_PIN_COLOR = 'c0392b';
+/** Max category (school/hospital) markers — keeps the URL + map readable. */
+const MAX_CATEGORY_MARKERS = 14;
 
 export interface LatLng {
   lat: number;
@@ -29,6 +22,14 @@ export interface LatLng {
 
 /** A comp marker: coordinates plus an optional 1–2 char label (its legend number). */
 export type MapComp = LatLng & { label?: string };
+
+/**
+ * A category marker (school by type / hospital): coordinates + a Maki `glyph`
+ * ('' = plain pin) + hex `color` (no '#'). The caller (Node 13) decides the
+ * glyph/colour per category via src/report/mapMarkers.ts, so the map and the
+ * report legend stay in sync.
+ */
+export type CategoryMarker = LatLng & { glyph: string; color: string };
 
 /**
  * Build an interactive Google Maps URL centred on the subject coordinates.
@@ -48,16 +49,14 @@ export function interactiveMapHref(subject: LatLng): string {
  * @param comps    Selected comp coordinates; capped at MAX_COMP_MARKERS. When a
  *                 `label` is given the pin is numbered (medium) to key into the
  *                 report's price legend; otherwise it's a small unlabelled pin.
- * @param schools  Nearby school/early-ed coordinates (green school-glyph pins);
- *                 capped at MAX_SCHOOL_MARKERS to keep the map readable.
- * @param hospitals Nearby hospital coordinates (red hospital-glyph pins);
- *                 capped at MAX_HOSPITAL_MARKERS.
+ * @param markers  Category markers (schools by type / hospitals) — each carries
+ *                 its own Maki `glyph` + hex `color` (decided by the caller via
+ *                 mapMarkers.ts); capped at MAX_CATEGORY_MARKERS.
  */
 export async function staticMapDataUrl(
   subject: LatLng,
   comps: MapComp[],
-  schools: LatLng[] = [],
-  hospitals: LatLng[] = [],
+  markers: CategoryMarker[] = [],
 ): Promise<string | null> {
   const token = process.env.MAPBOX_TOKEN;
   if (!token) {
@@ -78,18 +77,17 @@ export async function staticMapDataUrl(
         : `pin-s+${COMP_PIN_COLOR}(${c.lng},${c.lat})`,
     );
 
-  // School markers: small green pins with a "school" glyph (distinct from
-  // subject + comps); nearest few only, so they don't crowd the map.
-  const schoolMarkers = schools
-    .slice(0, MAX_SCHOOL_MARKERS)
-    .map((s) => `pin-s-school+${SCHOOL_PIN_COLOR}(${s.lng},${s.lat})`);
+  // Category markers: small pins, glyph + colour per category (primary/secondary/
+  // childcare/hospital), so each type is visually distinct and keys to the legend.
+  const categoryMarkers = markers
+    .slice(0, MAX_CATEGORY_MARKERS)
+    .map((m) =>
+      m.glyph
+        ? `pin-s-${m.glyph}+${m.color}(${m.lng},${m.lat})`
+        : `pin-s+${m.color}(${m.lng},${m.lat})`,
+    );
 
-  // Hospital markers: small red pins with a "hospital" glyph.
-  const hospitalMarkers = hospitals
-    .slice(0, MAX_HOSPITAL_MARKERS)
-    .map((hp) => `pin-s-hospital+${HOSPITAL_PIN_COLOR}(${hp.lng},${hp.lat})`);
-
-  const overlays = [subjectMarker, ...compMarkers, ...schoolMarkers, ...hospitalMarkers].join(',');
+  const overlays = [subjectMarker, ...compMarkers, ...categoryMarkers].join(',');
 
   // streets-v12 → full-colour base map (roads, parks, water, labels) rather than
   // the muted grey light-v11. auto → Mapbox auto-fits the viewport to all markers;
