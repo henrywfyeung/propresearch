@@ -26,6 +26,8 @@ function comp(over: Partial<Comparable>): Comparable {
     adjustments: [],
     adjustedValue: null,
     adjustmentNarrative: null,
+    verdict: null,
+    comparison: null,
     source: {
       provider: 'rea',
       endpoint: '/x',
@@ -48,11 +50,7 @@ describe('selectedMapComps', () => {
   });
 
   it('drops comps without coordinates', () => {
-    const comps = [
-      comp({ id: 'a' }),
-      comp({ id: 'b', lat: null }),
-      comp({ id: 'c', lng: null }),
-    ];
+    const comps = [comp({ id: 'a' }), comp({ id: 'b', lat: null }), comp({ id: 'c', lng: null })];
     expect(selectedMapComps(comps).map((c) => c.id)).toEqual(['a']);
   });
 

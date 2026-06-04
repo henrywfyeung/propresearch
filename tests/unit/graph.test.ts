@@ -30,6 +30,9 @@ vi.mock('@/agents/nodes/12_fetchDemographics', () => ({
 vi.mock('@/agents/nodes/04a_visionAnalyseSubject', () => ({
   visionAnalyseSubject: vi.fn().mockResolvedValue({}),
 }));
+vi.mock('@/agents/nodes/04b_visionAnalyseComps', () => ({
+  visionAnalyseComps: vi.fn().mockResolvedValue({}),
+}));
 
 import { uploadPdf } from '@/tools/storage/s3';
 vi.mock('@/report/pdf', () => ({
@@ -40,14 +43,18 @@ vi.mock('@/tools/storage/s3', () => ({
 }));
 vi.mock('@/tools/mapbox/staticMap', () => ({
   staticMapDataUrl: vi.fn().mockResolvedValue(null),
-  interactiveMapHref: vi.fn().mockReturnValue('https://www.google.com/maps/search/?api=1&query=0,0'),
+  interactiveMapHref: vi
+    .fn()
+    .mockReturnValue('https://www.google.com/maps/search/?api=1&query=0,0'),
 }));
 vi.mock('@/tools/schools/ga', () => ({
   fetchNearbyFacilities: vi.fn().mockResolvedValue([]),
   fetchNearbyHospitals: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/tools/planning/zoning', () => ({
-  fetchPlanningControls: vi.fn().mockResolvedValue({ zoneCode: null, zoneDescription: null, overlays: [] }),
+  fetchPlanningControls: vi
+    .fn()
+    .mockResolvedValue({ zoneCode: null, zoneDescription: null, overlays: [] }),
 }));
 vi.mock('@/tools/proximity/proximity', () => ({
   fetchProximityHazards: vi.fn().mockResolvedValue({ transmissionLine: null, freeway: null }),
@@ -68,13 +75,27 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-05-30T00:00:00Z'));
   mockLlm.mockReset();
   mockLlm.mockImplementation(async (opts: { node: string }) => {
-    if (opts.node === 'reasonAndSelect') {
+    // Node 06 runs as a 3-phase map-reduce: plan → analyse → select.
+    if (opts.node === 'reasonAndSelect:plan') {
       return {
-        decisions: [
+        plans: [
+          { compId: 'NEAR', verdict: 'comparable', shortlist: true },
+          { compId: 'FAR', verdict: 'inferior', shortlist: true },
+        ],
+      } as never;
+    }
+    if (opts.node === 'reasonAndSelect:analyse') {
+      return {
+        analyses: [
           {
             compId: 'NEAR',
-            selection: 'fair-value',
-            rejectionReason: null,
+            verdict: 'comparable',
+            comparison: {
+              size: 'similar',
+              layout: 'same 3/2',
+              condition: 'comparable',
+              location: 'close',
+            },
             adjustments: [
               {
                 dimension: 'land-area',
@@ -85,16 +106,41 @@ beforeEach(() => {
             adjustmentNarrative:
               'Adjusted modestly; otherwise a close like-for-like comparison overall here.',
             adjustedValue: 2_600_000,
+            recommendExclude: false,
+            recommendExcludeReason: null,
+          },
+          {
+            compId: 'FAR',
+            verdict: 'inferior',
+            comparison: {
+              size: 'larger',
+              layout: '5 bed',
+              condition: 'unknown',
+              location: 'further',
+            },
+            adjustments: [],
+            adjustmentNarrative:
+              'Rejected: distance and bedroom mismatch make this an unreliable comparison here.',
+            adjustedValue: 4_000_000,
+            recommendExclude: true,
+            recommendExcludeReason: 'Distance and size mismatch too large.',
+          },
+        ],
+      } as never;
+    }
+    if (opts.node === 'reasonAndSelect:select') {
+      return {
+        selections: [
+          {
+            compId: 'NEAR',
+            selection: 'fair-value',
+            rejectionReason: null,
             selectionRationale: 'Close match on beds, baths and proximity to the subject.',
           },
           {
             compId: 'FAR',
             selection: 'rejected',
             rejectionReason: 'too far and bedroom count differs',
-            adjustments: [],
-            adjustmentNarrative:
-              'Rejected: distance and bedroom mismatch make this an unreliable comparison here.',
-            adjustedValue: 4_000_000,
             selectionRationale:
               'Excluded from the fair-value set due to distance and size mismatch.',
           },

@@ -43,7 +43,11 @@ export function isTertiary(rawName: string): boolean {
 
 export function classifyFacility(rawName: string): FacilityType {
   const n = rawName.toUpperCase();
-  if (/CHILD ?CARE|EARLY LEARN|EARLY EDUC|KINDER|PRE-?SCHOOL|MONTESSORI|\bELC\b|CHILDREN'?S CENTRE|OCCASIONAL CARE/.test(n))
+  if (
+    /CHILD ?CARE|EARLY LEARN|EARLY EDUC|KINDER|PRE-?SCHOOL|MONTESSORI|\bELC\b|CHILDREN'?S CENTRE|OCCASIONAL CARE/.test(
+      n,
+    )
+  )
     return 'early-education';
   if (/PREPARATORY|PREP SCHOOL|JUNIOR SCHOOL|INFANTS?\b/.test(n)) return 'primary';
   if (/\bP-?12\b|\bK-?12\b|\bPREP-?12\b|\b7-?12\b|COMBINED/.test(n)) return 'combined';
@@ -128,7 +132,13 @@ export async function fetchNearbyFacilities(
   subject: LatLng,
   radiusM = 2000,
 ): Promise<NearbyFacility[]> {
-  const places = await queryGaPoints(GA_EDUCATION_URL, subject, radiusM, '1=1', 'fetchNearbyFacilities');
+  const places = await queryGaPoints(
+    GA_EDUCATION_URL,
+    subject,
+    radiusM,
+    '1=1',
+    'fetchNearbyFacilities',
+  );
   return places
     .filter((p) => !isTertiary(p.name))
     .map((p) => ({ ...p, type: classifyFacility(p.name) }));
@@ -139,7 +149,10 @@ export async function fetchNearbyFacilities(
  * sorted nearest-first. Uses GA's `main_function = 'Hospital'` classification
  * (excludes aged-care / nursing homes).
  */
-export async function fetchNearbyHospitals(subject: LatLng, radiusM = 5000): Promise<NearbyPlace[]> {
+export async function fetchNearbyHospitals(
+  subject: LatLng,
+  radiusM = 5000,
+): Promise<NearbyPlace[]> {
   return queryGaPoints(
     GA_HEALTH_URL,
     subject,

@@ -43,7 +43,8 @@ function nearestOnPaths(
   for (const path of paths) {
     for (const [lng, lat] of path) {
       const distanceM = haversineMeters(subject, { lat, lng });
-      if (!best || distanceM < best.distanceM) best = { distanceM: Math.round(distanceM), lat, lng };
+      if (!best || distanceM < best.distanceM)
+        best = { distanceM: Math.round(distanceM), lat, lng };
     }
   }
   return best;
@@ -54,9 +55,14 @@ const GaLineResponse = z.object({
     .array(
       z.object({
         attributes: z
-          .object({ name: z.string().nullish(), capacitykv: z.union([z.number(), z.string()]).nullish() })
+          .object({
+            name: z.string().nullish(),
+            capacitykv: z.union([z.number(), z.string()]).nullish(),
+          })
           .passthrough(),
-        geometry: z.object({ paths: z.array(z.array(z.tuple([z.number(), z.number()]))) }).nullish(),
+        geometry: z
+          .object({ paths: z.array(z.array(z.tuple([z.number(), z.number()]))) })
+          .nullish(),
       }),
     )
     .nullish(),
@@ -90,7 +96,8 @@ export async function fetchNearestTransmission(subject: LatLng): Promise<Nearest
       if (!best || near.distanceM < best.distanceM) {
         const kv = f.attributes.capacitykv;
         const name = f.attributes.name?.trim();
-        const label = [kv ? `${kv} kV` : null, name].filter(Boolean).join(' · ') || 'Transmission line';
+        const label =
+          [kv ? `${kv} kV` : null, name].filter(Boolean).join(' · ') || 'Transmission line';
         best = { distanceM: near.distanceM, label, lat: near.lat, lng: near.lng };
       }
     }
@@ -119,7 +126,10 @@ export async function fetchNearestFreeway(subject: LatLng): Promise<NearestFeatu
     const res = await fetch(OVERPASS_URL, {
       method: 'POST',
       // Overpass rejects requests without a User-Agent.
-      headers: { 'User-Agent': 'propsearch/1.0', 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'User-Agent': 'propsearch/1.0',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
       body: `data=${encodeURIComponent(query)}`,
       signal: AbortSignal.timeout(25_000),
     });

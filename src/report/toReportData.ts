@@ -2,8 +2,8 @@
 
 import type { GraphState } from '@/agents/annotation';
 import type { ReportData } from '@/report/template/ReportDocument';
-import { computeSuburbStats } from '@/tools/market/suburbStats';
 import { interactiveMapHref } from '@/tools/mapbox/staticMap';
+import { computeSuburbStats } from '@/tools/market/suburbStats';
 
 export function toReportData(state: GraphState): ReportData | null {
   const a = state.resolvedAddress;
@@ -24,6 +24,7 @@ export function toReportData(state: GraphState): ReportData | null {
           reconciled: t.reconciled,
           confidence: t.confidence,
           uncertaintyNote: t.uncertaintyNote,
+          bands: t.bands ?? null,
         }
       : null,
     comparables: state.comparables,

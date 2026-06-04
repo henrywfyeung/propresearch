@@ -72,6 +72,25 @@ export const AdjustmentSchema = z.object({
   sourceRef: z.array(SourceRefSchema),
 });
 
+// Overall standing of a comparable *relative to the subject* (adopted from a
+// professional CMA's "Overall Comparison" verdict). 'superior' = the comp is a
+// better property than the subject (so its price sets a ceiling); 'inferior' =
+// worse (sets a floor); 'comparable' = alike (its price sits in the band).
+export const CompVerdictSchema = z.enum(['superior', 'comparable', 'inferior']);
+export type CompVerdict = z.infer<typeof CompVerdictSchema>;
+
+// Structured, human-readable comparison across the four axes a valuer reasons
+// over. Each axis is a short phrase (bounded to keep PDF prose tight, in the
+// spirit of the [R42] vision-enum freeze). Kept as discrete fields so a future
+// interactive web report can render/filter per axis.
+export const CompComparisonSchema = z.object({
+  size: z.string().min(3).max(160),
+  layout: z.string().min(3).max(160),
+  condition: z.string().min(3).max(160),
+  location: z.string().min(3).max(160),
+});
+export type CompComparison = z.infer<typeof CompComparisonSchema>;
+
 export const ComparableSchema = z.object({
   id: z.string(),
   address: z.string(),
@@ -91,6 +110,10 @@ export const ComparableSchema = z.object({
   visionAnalysis: CompVisionSchema.nullable(),
   similarityScore: z.number().min(0).max(100),
   selection: z.enum(['fair-value', 'negotiation-anchor', 'rejected', 'candidate']),
+  // Overall verdict vs the subject + the per-axis qualitative comparison
+  // (Node 06). Nullable so degraded / pre-verdict reports still validate.
+  verdict: CompVerdictSchema.nullable().default(null),
+  comparison: CompComparisonSchema.nullable().default(null),
   adjustments: z.array(AdjustmentSchema).max(8),
   adjustedValue: z.number().nullable(),
   adjustmentNarrative: z.string().nullable(),
@@ -181,6 +204,26 @@ export type RiskFlag = z.infer<typeof RiskFlagSchema>;
 // Triangulation — CLAUDE.md §7.9 with the divergence guardrail [R43][R44]
 // --------------------------------------------------------------------------
 
+// Verdict-banded price bounds, derived deterministically from the comps' raw
+// sold prices grouped by `verdict` (adopted from a professional CMA's banded
+// scatter). These corroborate the similarity-weighted estimate rather than
+// replace it: inferior sales top out at `inferiorCap` (a floor under the
+// subject), superior sales start at `superiorFloor` (a ceiling), and
+// like-for-like sales span `comparableLow`–`comparableHigh`. Any bound is null
+// when no comp carries that verdict.
+export const ValuationBandsSchema = z.object({
+  inferiorCap: z.number().nullable(),
+  comparableLow: z.number().nullable(),
+  comparableHigh: z.number().nullable(),
+  superiorFloor: z.number().nullable(),
+  counts: z.object({
+    inferior: z.number().int().nonnegative(),
+    comparable: z.number().int().nonnegative(),
+    superior: z.number().int().nonnegative(),
+  }),
+});
+export type ValuationBands = z.infer<typeof ValuationBandsSchema>;
+
 export const TriangulatedValueSchema = z
   .object({
     compDerived: z.number(), // similarity-weighted mean of fair-value comps' adjustedValue
@@ -190,6 +233,7 @@ export const TriangulatedValueSchema = z
     confidence: z.enum(['high', 'medium', 'low']),
     spread: z.number().min(0), // (high - low) / median
     compIds: z.array(z.string()),
+    bands: ValuationBandsSchema.nullable().default(null),
     uncertaintyNote: z.string().nullable(), // required when spread > 0.25
     narrative: z.string().min(40),
   })

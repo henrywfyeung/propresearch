@@ -31,11 +31,21 @@ const VicPlanProps = z.object({
 async function fetchVic(lat: number, lng: number): Promise<PlanningControls> {
   const [zoneRes, overlayRes] = await Promise.allSettled([
     vicWfsPointQuery(
-      { typeName: 'open-data-platform:plan_zone', lat, lng, propertyName: 'zone_code,zone_description' },
+      {
+        typeName: 'open-data-platform:plan_zone',
+        lat,
+        lng,
+        propertyName: 'zone_code,zone_description',
+      },
       VicPlanProps,
     ),
     vicWfsPointQuery(
-      { typeName: 'open-data-platform:plan_overlay', lat, lng, propertyName: 'zone_code,zone_description' },
+      {
+        typeName: 'open-data-platform:plan_overlay',
+        lat,
+        lng,
+        propertyName: 'zone_code,zone_description',
+      },
       VicPlanProps,
     ),
   ]);

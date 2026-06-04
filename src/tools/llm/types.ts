@@ -24,4 +24,12 @@ export interface StructuredCallOpts<T> {
   promptVersion?: string;
   /** Langfuse trace id to associate this call with the parent report trace. */
   langfuseTraceId?: string;
+  /**
+   * Per-attempt deadline (ms) for the OpenAI Responses (reasoning) path,
+   * overriding OPENAI_RESPONSES_TIMEOUT_MS. Small map batches set this short so
+   * a stall is abandoned quickly instead of burning the full default.
+   */
+  reasoningTimeoutMs?: number;
+  /** Max fresh-job attempts for the reasoning path (overrides the default 3). */
+  reasoningMaxAttempts?: number;
 }

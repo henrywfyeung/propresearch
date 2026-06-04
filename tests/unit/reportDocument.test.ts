@@ -1,8 +1,8 @@
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
 import type { Comparable, RecentDA, RiskFlag } from '@/schemas/state';
-import type { NearbyFacility } from '@/tools/schools/ga';
 import type { SubjectVision } from '@/schemas/vision';
+import type { NearbyFacility } from '@/tools/schools/ga';
 import { describe, expect, it } from 'vitest';
 
 const data: ReportData = {
@@ -24,6 +24,7 @@ const data: ReportData = {
     reconciled: 4_500_000,
     confidence: 'high',
     uncertaintyNote: null,
+    bands: null,
   },
   comparables: [],
   risks: [],
@@ -471,6 +472,15 @@ describe('Visual inspection rendering', () => {
     staging: 'professionally-staged',
     presentationFactors: ['Fresh paint', 'Updated kitchen'],
     redFlags: ['Staining on ceiling'],
+    layout: {
+      storeys: 'double',
+      structure: 'free-standing',
+      positionInComplex: 'not-applicable',
+      singleLevelLiving: false,
+      streetFrontage: 'own-frontage',
+      era: 'contemporary',
+      configNotes: ['Open-plan living'],
+    },
     comment:
       'The property presents well with a contemporary renovation throughout the main living areas.',
   };
@@ -641,6 +651,8 @@ describe('Comparable source link rendering', () => {
     adjustments: [],
     adjustedValue: 1_050_000,
     adjustmentNarrative: null,
+    verdict: null,
+    comparison: null,
     source: {
       provider: 'rea',
       endpoint: '/properties/search?channel=sold',
@@ -661,6 +673,116 @@ describe('Comparable source link rendering', () => {
     const html = renderReportHtml({ ...data, comparables: [comp(null)] });
     expect(html).toContain('Source: realestate.com.au');
     expect(html).not.toContain('class="src-link"');
+  });
+});
+
+describe('Subject layout & configuration rendering', () => {
+  const layout = {
+    storeys: 'double' as const,
+    structure: 'free-standing' as const,
+    positionInComplex: 'not-applicable' as const,
+    singleLevelLiving: false,
+    streetFrontage: 'own-frontage' as const,
+    era: 'contemporary' as const,
+    configNotes: ['Open-plan living', 'No shared walls'],
+  };
+  const vision: SubjectVision = {
+    condition: 'good',
+    staging: 'vacant',
+    presentationFactors: [],
+    redFlags: [],
+    layout,
+    comment: 'Conservative inspector comment about the subject for the layout test here.',
+  };
+
+  it('renders a Layout & configuration block with known facts as tags', () => {
+    const html = renderReportHtml({ ...data, subjectVision: vision });
+    expect(html).toContain('Layout &amp; configuration');
+    expect(html).toContain('Double storey');
+    expect(html).toContain('Free-standing');
+    expect(html).toContain('Own street frontage');
+    expect(html).toContain('Contemporary');
+    expect(html).toContain('Open-plan living');
+    // not-applicable position is omitted; singleLevelLiving=false is not shown.
+    expect(html).not.toContain('Front of block');
+    expect(html).not.toContain('Single-level living');
+  });
+
+  it('omits the layout block entirely when every fact is unknown', () => {
+    const blank = {
+      storeys: 'unknown' as const,
+      structure: 'unknown' as const,
+      positionInComplex: 'unknown' as const,
+      singleLevelLiving: null,
+      streetFrontage: 'unknown' as const,
+      era: 'unknown' as const,
+      configNotes: [],
+    };
+    const html = renderReportHtml({ ...data, subjectVision: { ...vision, layout: blank } });
+    expect(html).not.toContain('Layout &amp; configuration');
+  });
+
+  it('omits the layout block when subjectVision is null', () => {
+    const html = renderReportHtml({ ...data, subjectVision: null });
+    expect(html).not.toContain('Layout &amp; configuration');
+  });
+});
+
+describe('Comparable verdict + 4-axis comparison rendering', () => {
+  const compBase: Comparable = {
+    id: 'v1',
+    address: '3 Vista St, Mosman NSW 2088',
+    salePrice: 2_500_000,
+    contractDate: '2026-05-01',
+    distanceM: 150,
+    lat: -33.82,
+    lng: 151.24,
+    beds: 3,
+    baths: 2,
+    landArea: 540,
+    propertyType: 'House',
+    photos: [],
+    listingUrl: null,
+    visionAnalysis: null,
+    similarityScore: 90,
+    selection: 'fair-value',
+    verdict: 'superior',
+    comparison: {
+      size: 'Bigger 640m2 block',
+      layout: 'Extra downstairs bedroom and second living',
+      condition: 'Fully renovated vs subject original',
+      location: 'Quieter cul-de-sac, leafier street',
+    },
+    adjustments: [],
+    adjustedValue: 2_450_000,
+    adjustmentNarrative: null,
+    source: {
+      provider: 'rea',
+      endpoint: '/x',
+      fetchedAt: '2026-05-01T00:00:00.000Z',
+      path: '/comparables/0/salePrice',
+    },
+  };
+
+  it('renders the verdict chip and the four labelled comparison axes', () => {
+    const html = renderReportHtml({ ...data, comparables: [compBase] });
+    expect(html).toContain('badge verdict-superior');
+    expect(html).toContain('class="cmp-axes"');
+    expect(html).toContain('<span class="ax">Size</span>');
+    expect(html).toContain('<span class="ax">Layout</span>');
+    expect(html).toContain('<span class="ax">Condition</span>');
+    expect(html).toContain('<span class="ax">Location</span>');
+    expect(html).toContain('Bigger 640m2 block');
+    expect(html).toContain('Quieter cul-de-sac, leafier street');
+  });
+
+  it('omits the comparison block when comparison is null (degraded run)', () => {
+    const html = renderReportHtml({
+      ...data,
+      comparables: [{ ...compBase, verdict: null, comparison: null }],
+    });
+    expect(html).not.toContain('class="cmp-axes"');
+    expect(html).not.toContain('badge verdict-');
   });
 });
 
@@ -687,7 +809,14 @@ describe('Map legend rendering', () => {
     adjustments: [],
     adjustedValue: null,
     adjustmentNarrative: null,
-    source: { provider: 'rea', endpoint: '/x', fetchedAt: '2026-04-01T00:00:00.000Z', path: '/comparables/0/salePrice' },
+    verdict: null,
+    comparison: null,
+    source: {
+      provider: 'rea',
+      endpoint: '/x',
+      fetchedAt: '2026-04-01T00:00:00.000Z',
+      path: '/comparables/0/salePrice',
+    },
   });
 
   it('renders a numbered price legend keyed to the map pins', () => {
@@ -740,7 +869,11 @@ describe('Schools & early education rendering', () => {
   });
 
   it('uses the schools-only heading when there are no hospitals', () => {
-    const html = renderReportHtml({ ...data, schools: [fac('X PRIMARY SCHOOL', 'primary', 500)], hospitals: [] });
+    const html = renderReportHtml({
+      ...data,
+      schools: [fac('X PRIMARY SCHOOL', 'primary', 500)],
+      hospitals: [],
+    });
     expect(html).toContain('Schools &amp; early education');
     expect(html).not.toContain('Hospitals &amp; medical');
   });
@@ -817,7 +950,11 @@ describe('Planning controls (zoning + overlays) rendering', () => {
   it('renders a NSW zone with no overlays', () => {
     const html = renderReportHtml({
       ...data,
-      planningControls: { zoneCode: 'R3', zoneDescription: 'Medium Density Residential', overlays: [] },
+      planningControls: {
+        zoneCode: 'R3',
+        zoneDescription: 'Medium Density Residential',
+        overlays: [],
+      },
     });
     expect(html).toContain('R3');
     expect(html).toContain('Medium Density Residential');
@@ -834,7 +971,12 @@ describe('Proximity & infrastructure rendering', () => {
     const html = renderReportHtml({
       ...data,
       proximityHazards: {
-        transmissionLine: { distanceM: 496, label: '66 kV · Richmond to North Richmond', lat: -37.8, lng: 144.9 },
+        transmissionLine: {
+          distanceM: 496,
+          label: '66 kV · Richmond to North Richmond',
+          lat: -37.8,
+          lng: 144.9,
+        },
         freeway: { distanceM: 184, label: 'M1', lat: -37.8, lng: 144.9 },
       },
     });

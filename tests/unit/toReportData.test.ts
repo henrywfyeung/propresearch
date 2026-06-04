@@ -11,6 +11,7 @@ const tri = {
   confidence: 'high' as const,
   spread: 0.08,
   compIds: ['a'],
+  bands: null,
   uncertaintyNote: null,
   narrative: 'Derived from fair-value comparables across the suburb here.',
 };

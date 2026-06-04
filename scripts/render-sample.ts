@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs';
 import { renderReportHtml } from '@/report/render';
 import type { ReportData } from '@/report/template/ReportDocument';
-import type { Comparable } from '@/schemas/state';
+import type { Comparable, CompVerdict } from '@/schemas/state';
 import puppeteer from 'puppeteer-core';
 
 const CHROME =
@@ -18,9 +18,10 @@ function comp(
   address: string,
   salePrice: number,
   contractDate: string,
-  baths: number,
   distanceM: number,
   selection: Comparable['selection'],
+  verdict: CompVerdict,
+  comparison: NonNullable<Comparable['comparison']>,
   adjustedValue: number,
 ): Comparable {
   return {
@@ -29,14 +30,19 @@ function comp(
     salePrice,
     contractDate,
     distanceM,
+    lat: -33.83,
+    lng: 151.24,
     beds: 4,
-    baths,
+    baths: 2,
     landArea: 540,
     propertyType: 'House',
     photos: [],
+    listingUrl: `https://www.realestate.com.au/property-house-nsw-mosman-${id}`,
     visionAnalysis: null,
     similarityScore: 82,
     selection,
+    verdict,
+    comparison,
     adjustments: [],
     adjustedValue,
     adjustmentNarrative: null,
@@ -68,6 +74,14 @@ const data: ReportData = {
     reconciled: 4_500_000,
     confidence: 'high',
     uncertaintyNote: null,
+    // Banded bounds derived from the comps below: inferior sales top out at
+    // $4.0m, like-for-like cluster $4.32m–$4.55m, superior sales start at $5.1m.
+    bands: {
+      inferiorCap: 4_000_000,
+      comparableLow: 4_320_000,
+      comparableHigh: 4_550_000,
+      superiorFloor: 5_100_000,
+    },
   },
   comparables: [
     comp(
@@ -75,32 +89,74 @@ const data: ReportData = {
       '26 Vista Street, Mosman NSW 2088',
       4_320_000,
       '2026-04-12',
-      2,
       540,
       'fair-value',
+      'comparable',
+      {
+        size: 'Near-identical 545m² block',
+        layout: 'Same 4/2 single-storey layout',
+        condition: 'Comparable, both recently refreshed',
+        location: 'Same quiet pocket, one street over',
+      },
       4_450_000,
     ),
     comp(
       'b',
       '46 Spencer Road, Mosman NSW 2088',
-      3_990_000,
+      4_550_000,
       '2026-02-16',
-      2,
       1104,
       'fair-value',
-      4_300_000,
+      'comparable',
+      {
+        size: 'Larger 600m² block',
+        layout: 'Extra study; otherwise alike',
+        condition: 'Similar presentation',
+        location: 'Busier road, slightly inferior position',
+      },
+      4_500_000,
+    ),
+    comp(
+      'd',
+      '8 Bardwell Road, Mosman NSW 2088',
+      4_000_000,
+      '2026-03-02',
+      820,
+      'rejected',
+      'inferior',
+      {
+        size: 'Smaller 470m² block',
+        layout: 'One fewer bedroom',
+        condition: 'Original, unrenovated kitchen and bath',
+        location: 'Comparable street',
+      },
+      4_100_000,
     ),
     comp(
       'c',
       '14 Erith Street, Mosman NSW 2088',
       5_300_000,
       '2026-04-11',
-      3,
       1325,
       'negotiation-anchor',
+      'superior',
+      {
+        size: 'Much larger 740m² parcel',
+        layout: 'Five bedrooms over two storeys',
+        condition: 'Architect-renovated throughout',
+        location: 'Premium harbour-side street',
+      },
       4_900_000,
     ),
   ],
+  risks: [],
+  recentDAs: [],
+  suburbStats: null,
+  demographics: null,
+  schools: [],
+  hospitals: [],
+  planningControls: null,
+  proximityHazards: null,
   prose: {
     summary: [
       {
@@ -130,17 +186,38 @@ const data: ReportData = {
       },
       {
         type: 'text',
-        text: 'Three fair-value comparables on similar land sizes cluster tightly between $4.0m and $4.3m once adjusted toward the subject, supporting a confident estimate. The $5.3m anchor sale on a larger parcel marks the upper bound a vendor may reach for.',
+        text: 'Like-for-like sales cluster between $4.32m and $4.55m, with an inferior, unrenovated sale at $4.0m setting a floor and a superior, architect-renovated home at $5.3m marking the ceiling. The subject sits comfortably inside the comparable band.',
       },
     ],
     comparables: [
       {
         type: 'text',
-        text: 'The selected sales are all four-bedroom houses sold within the last four months, within roughly a kilometre of the subject.',
+        text: 'The selected sales are all four-bedroom houses sold within the last four months, within roughly a kilometre of the subject. Each is judged superior, comparable or inferior across size, layout, condition and location.',
       },
     ],
   },
   generatedAt: '2026-05-31T00:00:00.000Z',
+  staticMapDataUrl: null,
+  mapHref: null,
+  photos: [],
+  floorplans: [],
+  subjectVision: {
+    condition: 'good',
+    staging: 'lived-in-tidy',
+    presentationFactors: ['Updated kitchen', 'Polished floorboards'],
+    redFlags: [],
+    layout: {
+      storeys: 'double',
+      structure: 'free-standing',
+      positionInComplex: 'not-applicable',
+      singleLevelLiving: true,
+      streetFrontage: 'own-frontage',
+      era: 'late-20th-century',
+      configNotes: ['1x downstairs bedroom + bathroom', 'No shared walls'],
+    },
+    comment:
+      'Well-presented double-storey home with a downstairs bedroom and bathroom; tidy throughout with no obvious defects in the supplied imagery.',
+  },
 };
 
 async function main() {

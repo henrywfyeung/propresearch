@@ -20,13 +20,13 @@ import {
   schoolStyle,
 } from '@/report/mapMarkers';
 import { formatValue, renderClaim } from '@/report/renderClaim';
-import type { PlanningControls } from '@/tools/planning/zoning';
-import type { ProximityHazards } from '@/tools/proximity/proximity';
-import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { SubjectVision } from '@/schemas/vision';
 import type { SuburbStats } from '@/tools/market/suburbStats';
+import type { PlanningControls } from '@/tools/planning/zoning';
+import type { ProximityHazards } from '@/tools/proximity/proximity';
+import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import { type ReactElement, createElement as h } from 'react';
 
 export interface ReportData {
@@ -48,6 +48,12 @@ export interface ReportData {
     reconciled: number;
     confidence: 'high' | 'medium' | 'low';
     uncertaintyNote: string | null;
+    bands: {
+      inferiorCap: number | null;
+      comparableLow: number | null;
+      comparableHigh: number | null;
+      superiorFloor: number | null;
+    } | null;
   } | null;
   comparables: Comparable[];
   risks: RiskFlag[];
@@ -112,6 +118,12 @@ export const reportStyles = `
   .attrs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin: 4px 0 10px; }
   .attrs .k { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .attrs .v { font-size: 11pt; font-weight: 600; }
+  .layout { margin: 2px 0 12px; }
+  .layout-h { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 5px; }
+  .layout-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .ltag { font-size: 8.5pt; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px;
+    color: var(--ink); background: #FAFAFA; }
+  .layout-notes { font-size: 8.5pt; color: var(--muted); margin-top: 5px; }
   .comp { border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; margin: 0 0 8px; break-inside: avoid; }
   .comp .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .comp .addr { font-weight: 600; font-size: 9.5pt; }
@@ -125,7 +137,15 @@ export const reportStyles = `
   .badge.sev-medium   { color: #8A5A00; border-color: #C99A00; }
   .badge.sev-low      { color: var(--muted); border-color: var(--line); }
   .badge.sev-informational { color: var(--muted); border-color: var(--line); }
-  .src { font-size: 7.5pt; color: var(--muted); margin-top: 4px; }
+  .badges { display: inline-flex; gap: 5px; align-items: baseline; }
+  .badge.verdict-superior { color: #1E6B45; border-color: #2E8B57; }
+  .badge.verdict-comparable { color: var(--accent); border-color: var(--accent); }
+  .badge.verdict-inferior { color: #5C636B; border-color: #9AA3AD; }
+  .cmp-axes { margin-top: 7px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+  .cmp-axis { font-size: 8.5pt; color: var(--ink); line-height: 1.35; }
+  .cmp-axis .ax { font-size: 7pt; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; margin-right: 4px; }
+  .src { font-size: 7.5pt; color: var(--muted); margin-top: 6px; }
   .src-link { color: var(--accent); text-decoration: underline; }
   .risk-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
     border-bottom: 1px solid var(--line); break-inside: avoid; }
@@ -211,6 +231,74 @@ function attr(label: string, value: string): ReactElement {
     { key: label },
     h('div', { className: 'k' }, label),
     h('div', { className: 'v num' }, value),
+  );
+}
+
+// Human-readable labels for the frozen layout enums. Keys that should not show
+// (e.g. 'unknown', 'not-applicable') are simply omitted from the maps.
+const STOREYS_LABEL: Record<string, string> = {
+  single: 'Single storey',
+  double: 'Double storey',
+  'split-level': 'Split level',
+  multi: 'Multi-level',
+};
+const STRUCTURE_LABEL: Record<string, string> = {
+  'free-standing': 'Free-standing',
+  'semi-detached': 'Semi-detached',
+  terraced: 'Terraced / row',
+  'attached-unit': 'Attached unit',
+};
+const POSITION_LABEL: Record<string, string> = {
+  front: 'Front of block',
+  rear: 'Rear of block',
+  middle: 'Middle of block',
+  'ground-floor': 'Ground floor',
+  'upper-floor': 'Upper floor',
+};
+const FRONTAGE_LABEL: Record<string, string> = {
+  'own-frontage': 'Own street frontage',
+  'shared-driveway': 'Shared driveway',
+  'battle-axe': 'Battle-axe block',
+};
+const ERA_LABEL: Record<string, string> = {
+  'period-pre-1945': 'Period (pre-1945)',
+  'mid-century': 'Mid-century',
+  'late-20th-century': 'Late 20th century',
+  contemporary: 'Contemporary',
+  'new-build': 'New build',
+};
+
+// "Layout & configuration" block in the Subject section — granular structural
+// facts read by vision (storeys, shared walls, position in block, single-level
+// living, era). Renders only known facts; returns null when nothing is known.
+function renderSubjectLayout(
+  layout: SubjectVision['layout'] | null | undefined,
+): ReactElement | null {
+  if (!layout) return null;
+  const facts: string[] = [];
+  const pushLabel = (map: Record<string, string>, key: string) => {
+    const v = map[key];
+    if (v) facts.push(v);
+  };
+  pushLabel(STOREYS_LABEL, layout.storeys);
+  pushLabel(STRUCTURE_LABEL, layout.structure);
+  pushLabel(POSITION_LABEL, layout.positionInComplex);
+  if (layout.singleLevelLiving === true) facts.push('Single-level living');
+  pushLabel(FRONTAGE_LABEL, layout.streetFrontage);
+  pushLabel(ERA_LABEL, layout.era);
+  const notes = layout.configNotes ?? [];
+  if (facts.length === 0 && notes.length === 0) return null;
+
+  return h(
+    'div',
+    { className: 'layout', key: 'layout' },
+    h('div', { className: 'layout-h' }, 'Layout & configuration'),
+    h(
+      'div',
+      { className: 'layout-tags' },
+      ...facts.map((f, i) => h('span', { className: 'ltag', key: i }, f)),
+    ),
+    notes.length > 0 ? h('div', { className: 'layout-notes' }, notes.join(' · ')) : null,
   );
 }
 
@@ -666,6 +754,11 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
   );
+  // The banded scatter plots the WHOLE verdict-classified pool (inferior +
+  // comparable + superior), not just the selected few, so the bands read.
+  // Falls back to the selected comps when no verdict is present (degraded run).
+  const verdictComps = comparables.filter((c) => c.verdict != null);
+  const chartComps = verdictComps.length > 0 ? verdictComps : selected;
 
   const masthead = h(
     'div',
@@ -700,6 +793,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
       attr('Land', subject.landArea != null ? `${subject.landArea} m²` : '—'),
       attr('Building', subject.buildingArea != null ? `${subject.buildingArea} m²` : '—'),
     ),
+    renderSubjectLayout(subjectVision?.layout),
     ...paragraphs(prose.subject),
   );
 
@@ -726,7 +820,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         h('p', { key: 'unc', className: 'uncertainty' }, triangulation.uncertaintyNote),
       );
     }
-    if (selected.length > 0) {
+    if (chartComps.length > 0) {
       valuationChildren.push(
         h('div', {
           key: 'chart',
@@ -737,11 +831,13 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
               low: triangulation.low,
               high: triangulation.high,
               reconciled: triangulation.reconciled,
-              comps: selected.map((c) => ({
+              bands: triangulation.bands,
+              comps: chartComps.map((c) => ({
                 label: c.address,
                 price: c.salePrice,
                 selection:
                   c.selection === 'negotiation-anchor' ? 'negotiation-anchor' : 'fair-value',
+                verdict: c.verdict,
               })),
             }),
           },
@@ -752,19 +848,20 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   valuationChildren.push(...paragraphs(prose.valuation));
   const valuation = h('section', { key: 'valuation' }, ...valuationChildren);
 
-  const compCards = selected.map((c) =>
-    h(
-      'div',
-      { key: c.id, className: 'comp' },
+  const axisRow = (label: string, text: string, key: string) =>
+    h('div', { className: 'cmp-axis', key }, h('span', { className: 'ax' }, label), ' ', text);
+
+  const compCards = selected.map((c) => {
+    const children: ReactElement[] = [
       h(
         'div',
-        { className: 'row' },
+        { className: 'row', key: 'r1' },
         h('span', { className: 'addr' }, c.address),
         h('span', { className: 'price num' }, formatValue(c.salePrice, 'currency-aud')),
       ),
       h(
         'div',
-        { className: 'row' },
+        { className: 'row', key: 'r2' },
         h(
           'span',
           { className: 'meta num' },
@@ -772,13 +869,37 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         ),
         h(
           'span',
-          { className: `badge ${c.selection === 'negotiation-anchor' ? 'anchor' : ''}` },
-          c.selection === 'negotiation-anchor' ? 'anchor' : 'fair value',
+          { className: 'badges' },
+          c.verdict
+            ? h('span', { className: `badge verdict-${c.verdict}`, key: 'v' }, c.verdict)
+            : null,
+          h(
+            'span',
+            {
+              className: `badge ${c.selection === 'negotiation-anchor' ? 'anchor' : ''}`,
+              key: 's',
+            },
+            c.selection === 'negotiation-anchor' ? 'anchor' : 'fair value',
+          ),
         ),
       ),
+    ];
+    if (c.comparison) {
+      children.push(
+        h(
+          'div',
+          { className: 'cmp-axes', key: 'cmp' },
+          axisRow('Size', c.comparison.size, 'size'),
+          axisRow('Layout', c.comparison.layout, 'layout'),
+          axisRow('Condition', c.comparison.condition, 'condition'),
+          axisRow('Location', c.comparison.location, 'location'),
+        ),
+      );
+    }
+    children.push(
       h(
         'div',
-        { className: 'src' },
+        { className: 'src', key: 'src' },
         'Source: ',
         c.listingUrl
           ? h(
@@ -788,8 +909,9 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
             )
           : 'realestate.com.au',
       ),
-    ),
-  );
+    );
+    return h('div', { key: c.id, className: 'comp' }, ...children);
+  });
   const comparablesSection = h(
     'section',
     { key: 'comparables' },
@@ -912,8 +1034,16 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
               'div',
               { key: c.id, className: 'map-legend-item' },
               h('span', { className: 'map-legend-n num' }, String(i + 1)),
-              h('span', { className: 'map-legend-addr' }, (c.address.split(',')[0] ?? c.address).trim()),
-              h('span', { className: 'map-legend-price num' }, formatValue(c.salePrice, 'currency-aud')),
+              h(
+                'span',
+                { className: 'map-legend-addr' },
+                (c.address.split(',')[0] ?? c.address).trim(),
+              ),
+              h(
+                'span',
+                { className: 'map-legend-price num' },
+                formatValue(c.salePrice, 'currency-aud'),
+              ),
             ),
           ),
         )

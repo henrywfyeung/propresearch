@@ -36,6 +36,8 @@ function toCompSummary(c: Comparable): ComposeInput['selectedComps'][number] {
     baths: c.baths,
     propertyType: c.propertyType,
     selection: c.selection,
+    verdict: c.verdict,
+    comparison: c.comparison,
   };
 }
 

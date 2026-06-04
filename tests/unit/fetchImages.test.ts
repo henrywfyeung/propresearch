@@ -155,9 +155,7 @@ describe('fetchImagesAsDataUrls', () => {
   });
 
   it('does NOT retry a 404 — skips immediately (permanent)', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      makeFetchResponse({ ok: false, status: 404 }),
-    );
+    vi.mocked(global.fetch).mockResolvedValueOnce(makeFetchResponse({ ok: false, status: 404 }));
 
     const results = await fetchImagesAsDataUrls(['https://cdn.example.com/missing.jpg'], 1);
 

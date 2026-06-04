@@ -26,7 +26,13 @@ beforeEach(() => {
 describe('fetchSchools', () => {
   it('writes nearby schools AND hospitals into state', async () => {
     vi.mocked(ga.fetchNearbyFacilities).mockResolvedValue([
-      { name: 'Richmond Primary School', type: 'primary', lat: -37.82, lng: 144.99, distanceM: 700 },
+      {
+        name: 'Richmond Primary School',
+        type: 'primary',
+        lat: -37.82,
+        lng: 144.99,
+        distanceM: 700,
+      },
     ]);
     vi.mocked(ga.fetchNearbyHospitals).mockResolvedValue([
       { name: 'Epworth Richmond', lat: -37.82, lng: 144.99, distanceM: 774 },
@@ -43,7 +49,7 @@ describe('fetchSchools', () => {
     );
     // biome-ignore lint/suspicious/noExplicitAny: minimal state
     const out = await fetchSchools({ resolvedAddress: RA } as any);
-    expect((out.hospitals?.length ?? 0)).toBeLessThanOrEqual(8);
+    expect(out.hospitals?.length ?? 0).toBeLessThanOrEqual(8);
   });
 
   it('errors in-band when there is no resolvedAddress', async () => {

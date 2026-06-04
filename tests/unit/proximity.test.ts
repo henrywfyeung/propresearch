@@ -14,8 +14,14 @@ describe('fetchNearestTransmission', () => {
     vi.mocked(global.fetch).mockResolvedValueOnce(
       json({
         features: [
-          { attributes: { name: 'Far Line', capacitykv: 500 }, geometry: { paths: [[[145.1, -37.95]]] } },
-          { attributes: { name: 'Near Line', capacitykv: 66 }, geometry: { paths: [[[144.995, -37.8245]]] } },
+          {
+            attributes: { name: 'Far Line', capacitykv: 500 },
+            geometry: { paths: [[[145.1, -37.95]]] },
+          },
+          {
+            attributes: { name: 'Near Line', capacitykv: 66 },
+            geometry: { paths: [[[144.995, -37.8245]]] },
+          },
         ],
       }),
     );

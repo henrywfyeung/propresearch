@@ -89,7 +89,9 @@ describe('staticMapDataUrl', () => {
 
   it('renders a plain pin when a category marker has no glyph', async () => {
     mockFetchOk();
-    await staticMapDataUrl(SUBJECT, COMPS, [{ lat: -33.83, lng: 151.25, glyph: '', color: 'e08e0b' }]);
+    await staticMapDataUrl(SUBJECT, COMPS, [
+      { lat: -33.83, lng: 151.25, glyph: '', color: 'e08e0b' },
+    ]);
     const url = vi.mocked(global.fetch).mock.calls[0]?.[0] as string;
     expect(url).toContain('pin-s+e08e0b');
   });

@@ -48,7 +48,12 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
     const hospitalMarkers = (state.hospitals ?? [])
       .filter((hp) => hp.distanceM <= 3000)
       .slice(0, 3)
-      .map((hp) => ({ lat: hp.lat, lng: hp.lng, glyph: HOSPITAL_STYLE.glyph, color: HOSPITAL_STYLE.color }));
+      .map((hp) => ({
+        lat: hp.lat,
+        lng: hp.lng,
+        glyph: HOSPITAL_STYLE.glyph,
+        color: HOSPITAL_STYLE.color,
+      }));
 
     data.staticMapDataUrl = await staticMapDataUrl({ lat: addr.lat, lng: addr.lng }, mapComps, [
       ...schoolMarkers,

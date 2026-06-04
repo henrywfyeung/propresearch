@@ -70,15 +70,34 @@ describe('toComparable', () => {
     expect(c?.landArea).toBe(1200);
   });
 
+  it('drops video-host (youtube) image entries so vision is not fed a 400ing URL', () => {
+    const withVideo = {
+      ...base,
+      images: [
+        { server: 'https://i3.au.reastatic.net', uri: '/a/image.jpg', name: 'photo' },
+        { server: 'https://img.youtube.com', uri: '/vi/abc/0.jpg', name: 'video' },
+      ],
+    };
+    const c = toComparable(withVideo, SUBJECT);
+    expect(c?.photos).toEqual(['https://i3.au.reastatic.net/1920x1080-format=jpg/a/image.jpg']);
+    expect(c?.photos.some((u) => u.includes('youtube'))).toBe(false);
+  });
+
   it('deep-links listingUrl to the canonical listing page (not the homepage)', () => {
     const c = toComparable(
       {
         ...base,
-        _links: { prettyUrl: { href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140' } },
+        _links: {
+          prettyUrl: {
+            href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140',
+          },
+        },
       },
       SUBJECT,
     );
-    expect(c?.listingUrl).toBe('https://www.realestate.com.au/property-apartment-nsw-mosman-150833140');
+    expect(c?.listingUrl).toBe(
+      'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140',
+    );
   });
 
   it('falls back to the bare-id short URL when no prettyUrl is present', () => {
@@ -101,7 +120,11 @@ describe('reaListingUrl', () => {
       reaListingUrl({
         ...base,
         prettyUrl: 'property-apartment-nsw-mosman-150833140',
-        _links: { prettyUrl: { href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140' } },
+        _links: {
+          prettyUrl: {
+            href: 'https://www.realestate.com.au/property-apartment-nsw-mosman-150833140',
+          },
+        },
       }),
     ).toBe('https://www.realestate.com.au/property-apartment-nsw-mosman-150833140');
   });

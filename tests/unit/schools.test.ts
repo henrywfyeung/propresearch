@@ -51,7 +51,10 @@ function gaResponse(features: { name: string; x: number; y: number }[]) {
   return {
     ok: true,
     json: async () => ({
-      features: features.map((f) => ({ attributes: { name: f.name }, geometry: { x: f.x, y: f.y } })),
+      features: features.map((f) => ({
+        attributes: { name: f.name },
+        geometry: { x: f.x, y: f.y },
+      })),
     }),
   } as unknown as Response;
 }

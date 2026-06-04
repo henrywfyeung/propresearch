@@ -6,7 +6,7 @@ import type { RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { LlmMessage } from '@/tools/llm/types';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 
-export const version = 'v1.5';
+export const version = 'v1.6';
 
 export type ComposeSection =
   | 'summary'
@@ -34,6 +34,12 @@ export interface ComposeInput {
     reconciled: number;
     confidence: 'high' | 'medium' | 'low';
     spread: number;
+    bands?: {
+      inferiorCap: number | null;
+      comparableLow: number | null;
+      comparableHigh: number | null;
+      superiorFloor: number | null;
+    } | null;
   } | null;
   selectedComps: Array<{
     id: string;
@@ -45,6 +51,8 @@ export interface ComposeInput {
     baths: number;
     propertyType: string;
     selection: string;
+    verdict: 'superior' | 'comparable' | 'inferior' | null;
+    comparison: { size: string; layout: string; condition: string; location: string } | null;
   }>;
   risks: RiskFlag[];
   recentDAs: RecentDA[];
@@ -60,8 +68,9 @@ const SECTION_BRIEF: Record<ComposeSection, string> = {
     'Write the executive summary: the headline verdict on the property and where its value sits.',
   subject: 'Describe the subject property from its attributes (beds, baths, parking, land, type).',
   valuation:
-    'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer.',
-  comparables: 'Walk through the selected comparable sales and why they were chosen.',
+    'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer. If the valuation carries quality "bands", use them: inferior sales set a floor under the subject, superior sales set a ceiling, and like-for-like (comparable) sales should bracket the estimate — say so plainly, and flag it if the estimate sits outside that bracket.',
+  comparables:
+    'Walk through the selected comparable sales. For each, state its overall verdict versus the subject (superior / comparable / inferior) and the key differences across size, layout, condition and location, then why it was chosen as a fair-value or anchor comp. Be specific and balanced — note both similarities and differences.',
   market:
     "Summarise the suburb's recent sales market from the stats — the typical price level, the spread, the sample size and how recent the data is. Frame it as market context (what's been selling), not a guarantee about the subject. If no stats are available, say the sample was too small. Additionally, if demographic data is available, note the suburb's profile — population, median age, household income, owner-occupier vs renter mix — as buyer context. Rent figures are weekly, mortgage monthly.",
   risks:

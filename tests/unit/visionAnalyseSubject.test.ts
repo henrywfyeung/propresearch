@@ -44,6 +44,15 @@ const SAMPLE_VISION = {
   staging: 'lived-in-tidy' as const,
   presentationFactors: ['freshly painted interiors', 'timber floors'],
   redFlags: [],
+  layout: {
+    storeys: 'single' as const,
+    structure: 'free-standing' as const,
+    positionInComplex: 'not-applicable' as const,
+    singleLevelLiving: true,
+    streetFrontage: 'own-frontage' as const,
+    era: 'late-20th-century' as const,
+    configNotes: ['Single-level living'],
+  },
   comment:
     'Property presents well overall. Interiors are clean and well-maintained with no obvious defects visible in the provided photos.',
 };

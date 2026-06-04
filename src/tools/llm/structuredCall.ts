@@ -20,6 +20,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { sql } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
+import { recordToSink } from './costSink';
 import { estimateCostUsd } from './costs';
 import type { LlmMessage, StructuredCallOpts } from './types';
 
@@ -160,15 +161,17 @@ async function runOpenAiReasoning(
   model: string,
   opts: StructuredCallOpts<unknown>,
 ): Promise<ModelResult<unknown>> {
-  const perAttemptMs = Number(process.env.OPENAI_RESPONSES_TIMEOUT_MS) || 280_000;
+  const perAttemptMs =
+    opts.reasoningTimeoutMs ?? (Number(process.env.OPENAI_RESPONSES_TIMEOUT_MS) || 280_000);
+  const maxAttempts = opts.reasoningMaxAttempts ?? REASONING_MAX_ATTEMPTS;
   let lastErr: unknown;
-  for (let attempt = 1; attempt <= REASONING_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await runOpenAiReasoningOnce(model, opts, perAttemptMs);
     } catch (err) {
       lastErr = err;
       logger.warn(
-        { attempt, maxAttempts: REASONING_MAX_ATTEMPTS, model, err: String(err) },
+        { attempt, maxAttempts, model, err: String(err) },
         'OpenAI reasoning attempt failed; retrying with a fresh request',
       );
     }
@@ -218,6 +221,18 @@ async function recordCall(
 ): Promise<void> {
   const costUsd = estimateCostUsd(model, usage);
   const ctx = getReportCtx();
+
+  // Optional in-memory per-node cost collector (CLI cost breakdown; no-op when
+  // no sink is active — i.e. the normal app/server path).
+  recordToSink({
+    node: opts.node,
+    provider,
+    model,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    costUsd,
+    latencyMs,
+  });
 
   // Synchronous ledger write BEFORE updating the in-memory counter — this row
   // is what rehydrateCostUsd reads after an Inngest step retry ([R24]).

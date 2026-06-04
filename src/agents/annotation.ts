@@ -4,9 +4,6 @@
 
 import { appendReducer, mergeByKey } from '@/agents/state';
 import type { ReportProse } from '@/schemas/claims';
-import type { PlanningControls } from '@/tools/planning/zoning';
-import type { ProximityHazards } from '@/tools/proximity/proximity';
-import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import type {
   Comparable,
   MarketContext,
@@ -16,6 +13,9 @@ import type {
   SuburbDemographics,
   TriangulatedValue,
 } from '@/schemas/state';
+import type { PlanningControls } from '@/tools/planning/zoning';
+import type { ProximityHazards } from '@/tools/proximity/proximity';
+import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import { Annotation } from '@langchain/langgraph';
 
 export const GraphAnnotation = Annotation.Root({

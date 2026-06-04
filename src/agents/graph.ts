@@ -7,6 +7,7 @@ import { GraphAnnotation, type GraphState } from '@/agents/annotation';
 import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
 import { visionAnalyseSubject } from '@/agents/nodes/04a_visionAnalyseSubject';
+import { visionAnalyseComps } from '@/agents/nodes/04b_visionAnalyseComps';
 import { fetchPlanning } from '@/agents/nodes/05_planningAndNews';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
@@ -22,7 +23,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 
 // Graph topology (spec §5 / CLAUDE.md §6.2):
 //
-//   START → resolveAddress ─┬→ fetchCandidateComps → reasonAndSelect → triangulate ─┐
+//   START → resolveAddress ─┬→ fetchCandidateComps → visionComps → reasonAndSelect → triangulate ─┐
 //                           ├→ visionSubject ────────────────────────────────────────┤
 //                           ├→ fetchRisks ──────────────────────────────────────────┤
 //                           ├→ fetchPlanning ────────────────────────────────────────┤
@@ -31,6 +32,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
+  .addNode('visionComps', visionAnalyseComps)
   .addNode('visionSubject', visionAnalyseSubject)
   .addNode('fetchPlanning', fetchPlanning)
   .addNode('fetchRisks', fetchRisks)
@@ -52,7 +54,10 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge('resolveAddress', 'fetchSchools')
   .addEdge('resolveAddress', 'fetchZoning')
   .addEdge('resolveAddress', 'fetchProximity')
-  .addEdge('fetchCandidateComps', 'reasonAndSelect')
+  // comp vision runs after the candidate pool is built, before selection so the
+  // verdicts + Size/Layout/Condition comparison are vision-grounded
+  .addEdge('fetchCandidateComps', 'visionComps')
+  .addEdge('visionComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
   // compose waits for triangulate, visionSubject, fetchRisks, fetchPlanning,
   // fetchDemographics, fetchSchools, fetchZoning AND fetchProximity (8-way join)

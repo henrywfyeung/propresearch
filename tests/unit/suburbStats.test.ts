@@ -23,6 +23,8 @@ function comp(overrides: Partial<Comparable> = {}): Comparable {
     adjustments: [],
     adjustedValue: null,
     adjustmentNarrative: null,
+    verdict: null,
+    comparison: null,
     source: {
       provider: 'rea',
       endpoint: '/properties/search?channel=sold',

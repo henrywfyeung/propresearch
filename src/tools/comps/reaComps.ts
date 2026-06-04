@@ -45,8 +45,20 @@ function landToM2(landSize: ReaSoldListing['landSize']): number | null {
   return landSize.value; // m2 / sqm
 }
 
+// REA listings can carry a video whose image entry is served from a video host
+// (e.g. https://img.youtube.com). withSize() would compose a malformed
+// `https://img.youtube.com/1920x1080-format=jpg/vi/<id>/0.jpg` URL that 400s
+// when handed to vision — so drop non-image hosts before building photo URLs.
+// (The subject path in listingMedia.ts is already safe: it allow-lists
+// name==='photo'. Sold-comp `images` aren't reliably name-tagged, so we
+// deny-list video hosts instead, which never drops a real REA photo.)
+const NON_IMAGE_HOST = /youtube\.com|youtu\.be|vimeo\.com/i;
+
 function photoUrls(l: ReaSoldListing, cap = 8): string[] {
-  return (l.images ?? []).map((i) => withSize(i.server, i.uri)).slice(0, cap);
+  return (l.images ?? [])
+    .filter((i) => !NON_IMAGE_HOST.test(i.server))
+    .map((i) => withSize(i.server, i.uri))
+    .slice(0, cap);
 }
 
 /**
@@ -90,6 +102,8 @@ export function toComparable(l: ReaSoldListing, subject: LatLng): Comparable | n
     visionAnalysis: null,
     similarityScore: 0,
     selection: 'candidate',
+    verdict: null,
+    comparison: null,
     adjustments: [],
     adjustedValue: null,
     adjustmentNarrative: null,

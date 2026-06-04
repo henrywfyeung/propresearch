@@ -41,34 +41,52 @@ async function main() {
   const { reportGraph } = await import('@/agents/graph');
   const { buildSubject } = await import('@/agents/subject');
   const { renderClaim } = await import('@/report/renderClaim');
+  const { collectCalls, summarizeCalls, formatCostTable } = await import('@/tools/llm/costSink');
 
   const subject = buildSubject(SUBJECT);
+  // Caller-owned so the cost breakdown still prints if the graph throws mid-run
+  // (e.g. a stalled reasoning node) — the `finally` reads what was spent.
+  const records: import('@/tools/llm/costSink').LlmCallRecord[] = [];
   const t0 = Date.now();
-  const state = await reportGraph.invoke({ reportId: randomUUID(), rawAddress: address, subject });
-  console.log(`(graph completed in ${Math.round((Date.now() - t0) / 1000)}s)\n`);
 
-  console.log('=== resolved ===');
-  console.log(state.resolvedAddress);
-  const fv = state.comparables.filter((c) => c.selection === 'fair-value');
-  const an = state.comparables.filter((c) => c.selection === 'negotiation-anchor');
-  console.log(`\n=== comps === ${state.comparables.length} candidates | ${fv.length} fair-value | ${an.length} anchor`);
-  console.log('\n=== value ===');
-  console.log(state.triangulation);
-  console.log('\n=== risks ===');
-  for (const r of state.risks ?? [])
-    console.log(`  ${r.category.padEnd(9)} ${r.severity.padEnd(13)}${r.dataAvailable ? '' : ' [unavailable]'} — ${r.description}`);
-  console.log('\n=== suburb market ===');
-  const d = state.demographics;
-  if (d)
-    console.log(`  ${d.sa2Name}: pop ${d.population}, median age ${d.medianAge}, hh income $${d.medianHouseholdIncomeWeekly}/wk, ${d.ownerOccupiedPct}% owner-occupied`);
-  console.log(`  recent DAs ≤500m: ${state.market?.recentDAs?.length ?? 0}`);
-  console.log('\n=== PROSE ===');
-  for (const [section, blocks] of Object.entries(state.prose ?? {})) {
-    console.log(`\n## ${section}`);
-    for (const b of blocks ?? []) console.log(`  ${renderClaim(b)}`);
+  try {
+    const state = await collectCalls(records, () =>
+      reportGraph.invoke({ reportId: randomUUID(), rawAddress: address, subject }),
+    );
+    console.log(`(graph completed in ${Math.round((Date.now() - t0) / 1000)}s)\n`);
+
+    console.log('=== resolved ===');
+    console.log(state.resolvedAddress);
+    const fv = state.comparables.filter((c) => c.selection === 'fair-value');
+    const an = state.comparables.filter((c) => c.selection === 'negotiation-anchor');
+    console.log(`\n=== comps === ${state.comparables.length} candidates | ${fv.length} fair-value | ${an.length} anchor`);
+    console.log('\n=== value ===');
+    console.log(state.triangulation);
+    console.log('\n=== risks ===');
+    for (const r of state.risks ?? [])
+      console.log(`  ${r.category.padEnd(9)} ${r.severity.padEnd(13)}${r.dataAvailable ? '' : ' [unavailable]'} — ${r.description}`);
+    console.log('\n=== suburb market ===');
+    const d = state.demographics;
+    if (d)
+      console.log(`  ${d.sa2Name}: pop ${d.population}, median age ${d.medianAge}, hh income $${d.medianHouseholdIncomeWeekly}/wk, ${d.ownerOccupiedPct}% owner-occupied`);
+    console.log(`  recent DAs ≤500m: ${state.market?.recentDAs?.length ?? 0}`);
+    console.log('\n=== PROSE ===');
+    for (const [section, blocks] of Object.entries(state.prose ?? {})) {
+      console.log(`\n## ${section}`);
+      for (const b of blocks ?? []) console.log(`  ${renderClaim(b)}`);
+    }
+    console.log('\n=== pdfUrl ===', state.pdfUrl);
+    if (state.errors.length) console.log('\n=== errors ===', state.errors);
+  } finally {
+    console.log(`\n=== COST BREAKDOWN (recorded LLM calls, ${Math.round((Date.now() - t0) / 1000)}s) ===`);
+    console.log(formatCostTable(summarizeCalls(records)));
+    console.log(
+      '\nNote: only SUCCESSFUL LLM calls are recorded. Abandoned gpt-5.4 reasoning\n' +
+        'attempts (stalls/timeouts) are NOT counted here, though OpenAI may still bill\n' +
+        'for them. Deterministic nodes (resolveAddress, fetch*, triangulate, render)\n' +
+        'make no LLM calls and cost $0. Prices are the estimates in src/tools/llm/costs.ts.',
+    );
   }
-  console.log('\n=== pdfUrl ===', state.pdfUrl);
-  if (state.errors.length) console.log('\n=== errors ===', state.errors);
 }
 
 // process.exit so the open workerDb pool (and any Puppeteer handle) doesn't keep

@@ -160,6 +160,8 @@ export function sampleComparable(id: string, over: Partial<Comparable> = {}): Co
     visionAnalysis: null,
     similarityScore: 80,
     selection: 'candidate',
+    verdict: null,
+    comparison: null,
     adjustments: [],
     adjustedValue: null,
     adjustmentNarrative: null,

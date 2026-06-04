@@ -14,13 +14,21 @@ export interface MarkerStyle {
   label: string;
 }
 
-export const SUBJECT_STYLE: MarkerStyle = { color: '1f3864', glyph: 'home', label: 'Subject property' };
+export const SUBJECT_STYLE: MarkerStyle = {
+  color: '1f3864',
+  glyph: 'home',
+  label: 'Subject property',
+};
 export const COMP_STYLE: MarkerStyle = {
   color: '5b6573',
   glyph: '',
   label: 'Comparable sales (numbered — see prices below)',
 };
-export const PRIMARY_STYLE: MarkerStyle = { color: '2e8b57', glyph: 'school', label: 'Primary schools' };
+export const PRIMARY_STYLE: MarkerStyle = {
+  color: '2e8b57',
+  glyph: 'school',
+  label: 'Primary schools',
+};
 export const SECONDARY_STYLE: MarkerStyle = {
   color: '2c6fb0',
   glyph: 'college',

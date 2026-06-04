@@ -31,6 +31,13 @@ const input = {
       baths: 2,
       propertyType: 'House',
       selection: 'fair-value',
+      verdict: 'comparable' as const,
+      comparison: {
+        size: 'Similar 500m² block',
+        layout: 'Same 3/2 layout, single storey',
+        condition: 'Comparable presentation',
+        location: 'Same street precinct',
+      },
     },
   ],
   risks: [],
@@ -40,8 +47,8 @@ const input = {
 };
 
 describe('compose prompt', () => {
-  it('is at version v1.5', () => {
-    expect(version).toBe('v1.5');
+  it('is at version v1.6', () => {
+    expect(version).toBe('v1.6');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);

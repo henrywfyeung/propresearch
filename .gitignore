@@ -25,6 +25,9 @@ pnpm-debug.log*
 .vscode/
 .idea/
 
+# Superpowers brainstorming companion (local mockups)
+.superpowers/
+
 # Test coverage
 coverage/
 .nyc_output/

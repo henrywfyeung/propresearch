@@ -86,9 +86,7 @@ export const ReaSoldListingSchema = z.object({
   // `_links.prettyUrl.href`. We prefer the absolute href so the PDF deep-links
   // each comp to its own listing page rather than the REA homepage.
   prettyUrl: z.string().nullish(),
-  _links: z
-    .object({ prettyUrl: z.object({ href: z.string() }).nullish() })
-    .nullish(),
+  _links: z.object({ prettyUrl: z.object({ href: z.string() }).nullish() }).nullish(),
 });
 export type ReaSoldListing = z.infer<typeof ReaSoldListingSchema>;
 
