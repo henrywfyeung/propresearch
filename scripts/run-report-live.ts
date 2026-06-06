@@ -126,6 +126,17 @@ async function main() {
           }
           data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
           data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
+          // Per-comp thumbnails (mirror Node 13).
+          const selectedComps = state.comparables.filter(
+            (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
+          );
+          const compPhotoEntries = await Promise.all(
+            selectedComps.map(async (c) => {
+              const thumbs = (c.photos ?? []).slice(0, 3).map((u) => u.replace('1920x1080', '480x320'));
+              return [c.id, await fetchImagesAsDataUrls(thumbs, 3)] as const;
+            }),
+          );
+          data.compPhotos = Object.fromEntries(compPhotoEntries.filter(([, u]) => u.length > 0));
           const html = renderReportHtml(data);
           const browser = await puppeteer.launch({
             executablePath: process.env.CHROME_PATH,

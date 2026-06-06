@@ -47,6 +47,8 @@ export function toReportData(state: GraphState): ReportData | null {
     // them with downloaded base64 data URLs (toReportData is sync, can't fetch).
     photos: [],
     floorplans: [],
+    // Per-comp thumbnails are downloaded by the render node (toReportData is sync).
+    compPhotos: {},
     subjectVision: subject.visionAnalysis ?? null,
   };
 }

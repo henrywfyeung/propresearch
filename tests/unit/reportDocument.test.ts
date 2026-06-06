@@ -58,6 +58,7 @@ const data: ReportData = {
   mapHref: null,
   photos: [],
   floorplans: [],
+  compPhotos: {},
   subjectVision: null,
 };
 
@@ -783,6 +784,25 @@ describe('Comparable verdict + 4-axis comparison rendering', () => {
     });
     expect(html).not.toContain('class="cmp-axes"');
     expect(html).not.toContain('badge verdict-');
+  });
+
+  it('renders a thumbnail strip from compPhotos when present', () => {
+    const a = 'data:image/jpeg;base64,AAA=';
+    const b = 'data:image/jpeg;base64,BBB=';
+    const html = renderReportHtml({
+      ...data,
+      comparables: [compBase],
+      compPhotos: { [compBase.id]: [a, b] },
+    });
+    expect(html).toContain('class="comp-photos"');
+    expect((html.match(/class="comp-photo"/g) ?? []).length).toBe(2);
+    expect(html).toContain(a);
+    expect(html).toContain(b);
+  });
+
+  it('omits the thumbnail strip when the comp has no compPhotos', () => {
+    const html = renderReportHtml({ ...data, comparables: [compBase], compPhotos: {} });
+    expect(html).not.toContain('class="comp-photos"');
   });
 });
 

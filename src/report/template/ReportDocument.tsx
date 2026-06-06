@@ -78,6 +78,9 @@ export interface ReportData {
   photos: string[];
   /** Floor plan image URLs (base64 data URLs after render-node download). */
   floorplans: string[];
+  /** Per-comp thumbnail photos (base64 data URLs), keyed by comp id. Render node
+   *  downloads a few small ones per selected comp; empty when unavailable. */
+  compPhotos: Record<string, string[]>;
   /** Visual inspection result from node 04a, or null when vision was skipped/failed. */
   subjectVision: SubjectVision | null;
 }
@@ -145,6 +148,9 @@ export const reportStyles = `
   .cmp-axis { font-size: 8.5pt; color: var(--ink); line-height: 1.35; }
   .cmp-axis .ax { font-size: 7pt; text-transform: uppercase; letter-spacing: .07em;
     color: var(--muted); font-weight: 600; margin-right: 4px; }
+  .comp-photos { display: flex; gap: 4px; margin-top: 7px; }
+  .comp-photo { width: 84px; height: 56px; object-fit: cover; border-radius: 3px;
+    border: 1px solid var(--line); }
   .src { font-size: 7.5pt; color: var(--muted); margin-top: 6px; }
   .src-link { color: var(--accent); text-decoration: underline; }
   .risk-row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0;
@@ -749,6 +755,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     mapHref,
     photos,
     floorplans,
+    compPhotos,
     subjectVision,
   } = data;
   const selected = comparables.filter(
@@ -884,6 +891,16 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
         ),
       ),
     ];
+    const cPhotos = compPhotos[c.id] ?? [];
+    if (cPhotos.length > 0) {
+      children.push(
+        h(
+          'div',
+          { className: 'comp-photos', key: 'photos' },
+          ...cPhotos.map((u, i) => h('img', { key: i, className: 'comp-photo', src: u, alt: '' })),
+        ),
+      );
+    }
     if (c.comparison) {
       children.push(
         h(

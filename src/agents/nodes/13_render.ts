@@ -81,6 +81,19 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
   data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
   data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
 
+  // A few small thumbnails per selected comp — a visual hint in each comp card.
+  // Request a smaller REA render size (480x320) so the PDF stays light.
+  const selectedComps = state.comparables.filter(
+    (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
+  );
+  const compPhotoEntries = await Promise.all(
+    selectedComps.map(async (c) => {
+      const thumbs = (c.photos ?? []).slice(0, 3).map((u) => u.replace('1920x1080', '480x320'));
+      return [c.id, await fetchImagesAsDataUrls(thumbs, 3)] as const;
+    }),
+  );
+  data.compPhotos = Object.fromEntries(compPhotoEntries.filter(([, urls]) => urls.length > 0));
+
   // Diagnostic: how many photos arrived in state vs how many actually embedded.
   // A gap (state has N, embedded < N) points at render-time CDN download failures;
   // state itself being short points upstream (Node 04a fetch / fan-out).
