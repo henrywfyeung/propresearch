@@ -88,6 +88,7 @@ async function main() {
         const { renderReportHtml } = await import('@/report/render');
         const { staticMapDataUrl } = await import('@/tools/mapbox/staticMap');
         const { selectedMapComps } = await import('@/report/mapComps');
+        const { EARLY_ED_STYLE, HOSPITAL_STYLE, schoolStyle } = await import('@/report/mapMarkers');
         const puppeteer = (await import('puppeteer-core')).default;
         const { writeFileSync } = await import('node:fs');
         const data = toReportData(state);
@@ -99,11 +100,29 @@ async function main() {
               lng: c.lng as number,
               label: String(i + 1),
             }));
-            data.staticMapDataUrl = await staticMapDataUrl(
-              { lat: a.lat, lng: a.lng },
-              mapComps,
-              [],
-            ).catch(() => null);
+            // Mirror Node 13: distinct school + hospital category markers.
+            const used = new Map<string, number>();
+            const schoolMarkers = (state.schools ?? []).flatMap((s) => {
+              const st = schoolStyle(s.type);
+              const cap = st === EARLY_ED_STYLE ? 2 : 3;
+              const n = used.get(st.color) ?? 0;
+              if (n >= cap) return [];
+              used.set(st.color, n + 1);
+              return [{ lat: s.lat, lng: s.lng, glyph: st.glyph, color: st.color }];
+            });
+            const hospitalMarkers = (state.hospitals ?? [])
+              .filter((hp) => hp.distanceM <= 3000)
+              .slice(0, 3)
+              .map((hp) => ({
+                lat: hp.lat,
+                lng: hp.lng,
+                glyph: HOSPITAL_STYLE.glyph,
+                color: HOSPITAL_STYLE.color,
+              }));
+            data.staticMapDataUrl = await staticMapDataUrl({ lat: a.lat, lng: a.lng }, mapComps, [
+              ...schoolMarkers,
+              ...hospitalMarkers,
+            ]).catch(() => null);
           }
           data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
           data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
