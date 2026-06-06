@@ -77,6 +77,61 @@ async function main() {
     }
     console.log('\n=== pdfUrl ===', state.pdfUrl);
     if (state.errors.length) console.log('\n=== errors ===', state.errors);
+
+    // Optional: re-render the live state to a local PNG/PDF for visual review
+    // (SAVE_REPORT_PNG=/tmp/foo → /tmp/foo.png + /tmp/foo.pdf).
+    const out = process.env.SAVE_REPORT_PNG;
+    if (out) {
+      try {
+        const { toReportData } = await import('@/report/toReportData');
+        const { fetchImagesAsDataUrls } = await import('@/report/fetchImages');
+        const { renderReportHtml } = await import('@/report/render');
+        const { staticMapDataUrl } = await import('@/tools/mapbox/staticMap');
+        const { selectedMapComps } = await import('@/report/mapComps');
+        const puppeteer = (await import('puppeteer-core')).default;
+        const { writeFileSync } = await import('node:fs');
+        const data = toReportData(state);
+        if (data) {
+          const a = state.resolvedAddress;
+          if (a) {
+            const mapComps = selectedMapComps(state.comparables).map((c, i) => ({
+              lat: c.lat as number,
+              lng: c.lng as number,
+              label: String(i + 1),
+            }));
+            data.staticMapDataUrl = await staticMapDataUrl(
+              { lat: a.lat, lng: a.lng },
+              mapComps,
+              [],
+            ).catch(() => null);
+          }
+          data.photos = await fetchImagesAsDataUrls(state.subject?.photos ?? [], 6);
+          data.floorplans = await fetchImagesAsDataUrls(state.subject?.floorplans ?? [], 2);
+          const html = renderReportHtml(data);
+          const browser = await puppeteer.launch({
+            executablePath: process.env.CHROME_PATH,
+            headless: true,
+            args: ['--no-sandbox'],
+          });
+          const page = await browser.newPage();
+          await page.setContent(html, { waitUntil: 'networkidle0' });
+          writeFileSync(
+            `${out}.pdf`,
+            await page.pdf({
+              format: 'A4',
+              printBackground: true,
+              margin: { top: '15mm', right: '15mm', bottom: '20mm', left: '15mm' },
+            }),
+          );
+          await page.setViewport({ width: 880, height: 1245, deviceScaleFactor: 2 });
+          writeFileSync(`${out}.png`, await page.screenshot({ fullPage: true }));
+          await browser.close();
+          console.log(`\n=== local render -> ${out}.png / ${out}.pdf ===`);
+        }
+      } catch (e) {
+        console.log('local render failed:', e instanceof Error ? e.message : e);
+      }
+    }
   } finally {
     console.log(`\n=== COST BREAKDOWN (recorded LLM calls, ${Math.round((Date.now() - t0) / 1000)}s) ===`);
     console.log(formatCostTable(summarizeCalls(records)));

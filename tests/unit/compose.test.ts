@@ -162,9 +162,15 @@ describe('compose', () => {
     expect(mockLlm).not.toHaveBeenCalled();
   });
 
-  it('propagates when the LLM is unavailable', async () => {
+  it('degrades each section to a placeholder when the LLM is unavailable (no throw)', async () => {
     mockLlm.mockReset();
     mockLlm.mockRejectedValue(new Error('LLM_PROVIDERS_UNAVAILABLE'));
-    await expect(compose(graphState({ triangulation: tri }))).rejects.toThrow();
+    const out = await compose(graphState({ triangulation: tri }));
+    // Does not throw; every prose section falls back to a short note, and the
+    // structured valuation range claim is still stamped from triangulation.
+    const summary = out.prose?.summary;
+    expect(summary?.[0]?.type).toBe('text');
+    expect(JSON.stringify(summary)).toContain('could not be generated');
+    expect(out.prose?.valuation?.[0]?.type).toBe('range');
   });
 });

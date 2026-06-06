@@ -6,7 +6,7 @@ import type { RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
 import type { LlmMessage } from '@/tools/llm/types';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 
-export const version = 'v1.6';
+export const version = 'v1.7';
 
 export type ComposeSection =
   | 'summary'
@@ -68,9 +68,9 @@ const SECTION_BRIEF: Record<ComposeSection, string> = {
     'Write the executive summary: the headline verdict on the property and where its value sits.',
   subject: 'Describe the subject property from its attributes (beds, baths, parking, land, type).',
   valuation:
-    'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer. If the valuation carries quality "bands", use them: inferior sales set a floor under the subject, superior sales set a ceiling, and like-for-like (comparable) sales should bracket the estimate — say so plainly, and flag it if the estimate sits outside that bracket.',
+    'Explain how the comparable sales support the estimated value range, and what the confidence and any uncertainty mean for a buyer. If quality "bands" are provided, mention them only as light market context (the rough span comparable sales fell in) — do NOT raise an alarm about where the estimate sits relative to the bands, and do not claim the estimate is "outside" any bracket. Keep it to one or two sentences grounded in the range + confidence.',
   comparables:
-    'Walk through the selected comparable sales. For each, state its overall verdict versus the subject (superior / comparable / inferior) and the key differences across size, layout, condition and location, then why it was chosen as a fair-value or anchor comp. Be specific and balanced — note both similarities and differences.',
+    'Walk through the selected comparable sales. For each, state its overall verdict versus the subject (superior / comparable / inferior), the key size/layout/condition/location differences, its adjusted value, and why it was chosen. CONSISTENCY RULES: (1) anchor framing must follow the ADJUSTED VALUE, not the verdict — call an anchor "upper-end" only if its adjusted value is ABOVE the estimate and "lower-end" only if BELOW; never call a higher-adjusted comp a lower-end anchor. (2) Keep the verdict, adjusted value and anchor wording mutually consistent (e.g. do not describe an inferior-graded comp that adjusted to a HIGH value as the "cheaper/lower" reference). Be specific and balanced.',
   market:
     "Summarise the suburb's recent sales market from the stats — the typical price level, the spread, the sample size and how recent the data is. Frame it as market context (what's been selling), not a guarantee about the subject. If no stats are available, say the sample was too small. Additionally, if demographic data is available, note the suburb's profile — population, median age, household income, owner-occupier vs renter mix — as buyer context. Rent figures are weekly, mortgage monthly.",
   risks:

@@ -107,7 +107,59 @@ describe('computeValuationBands', () => {
     });
     const out = triangulate(state);
     expect(out.triangulation?.bands?.superiorFloor).toBe(900_000);
-    expect(out.triangulation?.narrative).toContain('superior sales start near');
+    expect(out.triangulation?.narrative).toContain('higher-graded from');
+    expect(out.triangulation?.narrative.toLowerCase()).not.toContain('outside');
     expect(() => TriangulatedValueSchema.parse(out.triangulation)).not.toThrow();
+  });
+});
+
+describe('triangulate band reliability', () => {
+  const v = (id: string, salePrice: number, verdict: 'inferior' | 'comparable' | 'superior') =>
+    sampleComparable(id, { salePrice, verdict, selection: 'fair-value', adjustedValue: salePrice });
+
+  it('suppresses bands (no "outside" alarm) when the bracket inverts', () => {
+    // inferior cap (2.0M) >= superior floor (1.0M) → quality verdicts not
+    // monotonic with price → unreliable.
+    const out = triangulate(
+      graphState({
+        comparables: [
+          v('a', 2_000_000, 'inferior'),
+          v('b', 1_000_000, 'superior'),
+          v('c', 1_500_000, 'comparable'),
+        ],
+      }),
+    );
+    expect(out.triangulation?.bands).toBeNull();
+    expect(out.triangulation?.narrative.toLowerCase()).not.toContain('outside');
+  });
+
+  it('suppresses bands when the comparable band is absurdly wide', () => {
+    const out = triangulate(
+      graphState({
+        comparables: [
+          v('a', 900_000, 'inferior'),
+          v('b', 1_000_000, 'comparable'),
+          v('c', 1_800_000, 'comparable'), // 1.8x → too wide
+          v('d', 1_300_000, 'superior'),
+        ],
+      }),
+    );
+    expect(out.triangulation?.bands).toBeNull();
+  });
+
+  it('keeps clean, tight bands as neutral market context', () => {
+    const out = triangulate(
+      graphState({
+        comparables: [
+          v('a', 900_000, 'inferior'),
+          v('b', 1_000_000, 'comparable'),
+          v('c', 1_050_000, 'comparable'),
+          v('d', 1_300_000, 'superior'),
+        ],
+      }),
+    );
+    expect(out.triangulation?.bands).not.toBeNull();
+    expect(out.triangulation?.narrative).toContain('market context');
+    expect(out.triangulation?.narrative.toLowerCase()).not.toContain('outside');
   });
 });

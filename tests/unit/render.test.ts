@@ -54,6 +54,7 @@ describe('render', () => {
     };
     const state = graphState({
       subject: subjectWithMedia,
+      triangulation: tri,
       prose: { summary: [{ type: 'text', text: 'hi' }] },
     });
 
@@ -80,6 +81,7 @@ describe('render', () => {
     };
     const state = graphState({
       subject: subjectWithPhotos,
+      triangulation: tri,
       prose: { summary: [{ type: 'text', text: 'hi' }] },
     });
 

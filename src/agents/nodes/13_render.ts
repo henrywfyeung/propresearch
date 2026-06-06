@@ -20,6 +20,20 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
     };
   }
 
+  // A valuation dossier with no valuation is not worth rendering — fail cleanly
+  // (retryable) instead of shipping a hollow PDF. This happens when an upstream
+  // LLM outage degrades Node 06 so far that no fair-value comp survives.
+  if (!state.triangulation) {
+    return {
+      errors: [
+        {
+          code: 'PARTIAL_DATA',
+          message: 'render: no valuation produced (triangulation null) — refusing to render',
+        },
+      ],
+    };
+  }
+
   // Fetch the static location map. Failures degrade gracefully (null → no map in PDF).
   const addr = state.resolvedAddress;
   if (addr) {

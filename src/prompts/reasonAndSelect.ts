@@ -7,7 +7,7 @@ import type { CompLayout, Condition, SubjectLayout } from '@/schemas/vision';
 import type { LlmMessage } from '@/tools/llm/types';
 
 export const planVersion = 'v1.0';
-export const analyseVersion = 'v1.1';
+export const analyseVersion = 'v1.2';
 export const selectVersion = 'v1.1';
 
 export interface ReasonSubject {
@@ -82,6 +82,7 @@ Rules:
 - Never invent attributes not given.
 - Express each adjustment as a percentage delta in [-0.30, 0.30]; positive means the SUBJECT is worth MORE than the comp on that dimension (so a clearly SUPERIOR comp gets NEGATIVE deltas and its adjustedValue must come DOWN well below its sale price; an inferior comp gets positive deltas and adjusts UP).
 - adjustedValue = the comp's sale price moved toward what the SUBJECT would fetch. CRITICAL: never leave a superior, much-higher-priced comp's adjustedValue near its own sale price — that inflates the valuation. If a comp is so different that bringing its adjustedValue near the subject's level would need more than about ±15% total adjustment, set recommendExclude:true with a recommendExcludeReason (it is too different to rely on); otherwise recommendExclude:false, reason null.
+- A difference in BEDROOM COUNT (or property type) is a MAJOR mismatch — such a comp almost always needs more than ±15% to align, so set recommendExclude:true rather than applying a large bedroom "premium". Keep adjustments sane: never adjust an inferior/smaller comp UP to an adjustedValue ABOVE the genuine like-for-like (same beds/baths) comparables, and never adjust a superior comp DOWN below them — that ordering is nonsensical. Inferior comps should land at the LOWER end of the adjusted range, superior at the UPPER end.
 - For each comp give an overall "verdict" vs the SUBJECT ("superior" / "inferior" / "comparable" — judge the property, not its price) and a "comparison" object with one concise phrase (3-160 chars) per axis stating how the comp differs from the SUBJECT:
   - size: land/internal area and overall scale.
   - layout: bed/bath/living configuration, single vs multi storey, position in any block/complex, shared walls.

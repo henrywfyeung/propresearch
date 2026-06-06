@@ -60,7 +60,30 @@ export function triangulate(state: GraphState): Partial<GraphState> {
   const confidence: 'high' | 'medium' | 'low' =
     spread <= 0.1 && selected.length >= 3 ? 'high' : spread <= 0.25 ? 'medium' : 'low';
 
-  const bands = computeValuationBands(state.comparables);
+  const rawBands = computeValuationBands(state.comparables);
+
+  // The verdict bands are reliable ONLY when the quick quality verdicts line up
+  // with price — a non-inverted bracket (inferior cap < superior floor) and a
+  // not-absurdly-wide comparable band. In heterogeneous markets they often
+  // don't (a "worse" property can sell for more), which previously produced an
+  // alarming, repeated "estimate outside the bracket" caution. So we gate on
+  // reliability, suppress the bands entirely when unreliable, and NEVER raise an
+  // alarm from them — they are soft market context, not the estimate. [R-quality]
+  const bracketInverted =
+    rawBands?.inferiorCap != null &&
+    rawBands.superiorFloor != null &&
+    rawBands.inferiorCap >= rawBands.superiorFloor;
+  const comparableTooWide =
+    rawBands?.comparableLow != null &&
+    rawBands.comparableHigh != null &&
+    rawBands.comparableLow > 0 &&
+    rawBands.comparableHigh / rawBands.comparableLow > 1.5;
+  const groups = rawBands
+    ? [rawBands.inferiorCap, rawBands.comparableLow, rawBands.superiorFloor].filter(
+        (x) => x != null,
+      ).length
+    : 0;
+  const bands = rawBands && !bracketInverted && !comparableTooWide && groups >= 2 ? rawBands : null;
 
   const fmt = (n: number) => `$${n.toLocaleString()}`;
   const uncertaintyNote =
@@ -68,32 +91,22 @@ export function triangulate(state: GraphState): Partial<GraphState> {
       ? `The selected comparables' adjusted values span ${fmt(low)}-${fmt(high)} (a wide range), so treat the estimate as indicative rather than precise.`
       : null;
 
-  // Corroborate the similarity-weighted estimate with the verdict bands, and
-  // flag the case where it falls outside the inferior→superior bracket.
+  // Neutral band context only (no "outside bracket" alarm).
   const bandBits: string[] = [];
   if (bands) {
     if (bands.comparableLow != null && bands.comparableHigh != null) {
       bandBits.push(
         bands.comparableLow === bands.comparableHigh
           ? `like-for-like sales around ${fmt(bands.comparableLow)}`
-          : `like-for-like sales cluster ${fmt(bands.comparableLow)}-${fmt(bands.comparableHigh)}`,
+          : `like-for-like sales ${fmt(bands.comparableLow)}-${fmt(bands.comparableHigh)}`,
       );
     }
-    if (bands.inferiorCap != null)
-      bandBits.push(`inferior sales top out near ${fmt(bands.inferiorCap)}`);
+    if (bands.inferiorCap != null) bandBits.push(`lower-graded up to ${fmt(bands.inferiorCap)}`);
     if (bands.superiorFloor != null)
-      bandBits.push(`superior sales start near ${fmt(bands.superiorFloor)}`);
+      bandBits.push(`higher-graded from ${fmt(bands.superiorFloor)}`);
   }
-  const outsideBracket =
-    bands != null &&
-    ((bands.inferiorCap != null && compDerived < bands.inferiorCap) ||
-      (bands.superiorFloor != null && compDerived > bands.superiorFloor));
-
-  const bandClause = bandBits.length ? ` By quality verdict, ${bandBits.join('; ')}.` : '';
-  const outsideClause = outsideBracket
-    ? ' Note: the estimate sits outside the inferior-to-superior bracket implied by the banded sales — treat with added caution.'
-    : '';
-  const narrative = `Derived from ${selected.length} fair-value comparable${selected.length === 1 ? '' : 's'}; similarity-weighted estimate ${fmt(compDerived)} with a range of ${fmt(low)}-${fmt(high)}.${bandClause}${outsideClause}`;
+  const bandClause = bandBits.length ? ` For market context, ${bandBits.join('; ')}.` : '';
+  const narrative = `Derived from ${selected.length} fair-value comparable${selected.length === 1 ? '' : 's'}; similarity-weighted estimate ${fmt(compDerived)} with a range of ${fmt(low)}-${fmt(high)}.${bandClause}`;
 
   return {
     triangulation: {

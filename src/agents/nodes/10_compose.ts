@@ -3,6 +3,7 @@
 // claim deterministically from state.triangulation.
 
 import type { GraphState } from '@/agents/annotation';
+import { logger } from '@/lib/observability/logger';
 import { type ComposeInput, type ComposeSection, buildMessages, version } from '@/prompts/compose';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable } from '@/schemas/state';
@@ -79,14 +80,31 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
           ],
         ];
       }
-      const out = await callWithFallback({
-        model: process.env.OPENAI_MODEL_COMPOSE ?? '',
-        schema: TextBlocksSchema,
-        node: `compose:${section}`,
-        promptVersion: version,
-        messages: buildMessages(section, input),
-      });
-      return [section, out.blocks];
+      // Graceful per-section: a transient LLM failure on one section must not
+      // abort the whole report (the 7 calls run in parallel; without this a
+      // single OpenAI hiccup + unconfigured fallback kills everything). Degrade
+      // that one section to a short note and carry on, like fetchRisks/Node 06.
+      try {
+        const out = await callWithFallback({
+          model: process.env.OPENAI_MODEL_COMPOSE ?? '',
+          schema: TextBlocksSchema,
+          node: `compose:${section}`,
+          promptVersion: version,
+          messages: buildMessages(section, input),
+        });
+        return [section, out.blocks];
+      } catch (err) {
+        logger.warn({ err: String(err), section }, 'compose: section failed; using placeholder');
+        return [
+          section,
+          [
+            {
+              type: 'text',
+              text: 'This section could not be generated due to a temporary issue and has been left brief; the structured figures elsewhere in the report are unaffected.',
+            },
+          ],
+        ];
+      }
     }),
   );
 

@@ -47,8 +47,8 @@ const input = {
 };
 
 describe('compose prompt', () => {
-  it('is at version v1.6', () => {
-    expect(version).toBe('v1.6');
+  it('is at version v1.7', () => {
+    expect(version).toBe('v1.7');
   });
   it('builds a system+user pair naming the section and carrying the suburb', () => {
     const msgs = buildMessages('valuation', input);
