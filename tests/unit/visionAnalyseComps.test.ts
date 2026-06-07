@@ -34,6 +34,23 @@ describe('visionAnalyseComps', () => {
     expect(mockLlm).toHaveBeenCalledTimes(2);
   });
 
+  it('only visions the top-K comps by similarity (cost control)', async () => {
+    process.env.VISION_COMPS_TOPK = '2';
+    mockLlm.mockResolvedValue(SAMPLE_VISION as never);
+    const state = graphState({
+      comparables: [
+        sampleComparable('hi1', { photos: ['https://cdn/1.jpg'], similarityScore: 90 }),
+        sampleComparable('hi2', { photos: ['https://cdn/2.jpg'], similarityScore: 85 }),
+        sampleComparable('lo', { photos: ['https://cdn/3.jpg'], similarityScore: 10 }),
+      ],
+    });
+    const out = await visionAnalyseComps(state);
+    expect(mockLlm).toHaveBeenCalledTimes(2); // only the top-2 by similarity
+    expect(out.comparables?.find((c) => c.id === 'lo')?.visionAnalysis).toBeNull();
+    expect(out.comparables?.find((c) => c.id === 'hi1')?.visionAnalysis?.condition).toBe('good');
+    delete process.env.VISION_COMPS_TOPK;
+  });
+
   it('skips comps with no photos without calling the LLM', async () => {
     mockLlm.mockResolvedValue(SAMPLE_VISION as never);
     const state = graphState({ comparables: [sampleComparable('a', { photos: [] })] });

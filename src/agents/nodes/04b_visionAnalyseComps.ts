@@ -53,6 +53,19 @@ export async function visionAnalyseComps(state: GraphState): Promise<Partial<Gra
   const comps = state.comparables;
   if (comps.length === 0) return {};
 
+  // Cost control: only vision the top-K comps by the deterministic
+  // similarityScore — a superset of the comps Node 06 will shortlist/select, so
+  // the few comps that actually appear in the report keep their vision while we
+  // skip ~half the pool (the low-similarity tail that gets rejected anyway).
+  // ~40% cheaper per report; Node 06 already handles a null comp visionAnalysis.
+  const topK = Number(process.env.VISION_COMPS_TOPK) || 14;
+  const visionIds = new Set(
+    [...comps]
+      .sort((a, b) => b.similarityScore - a.similarityScore)
+      .slice(0, topK)
+      .map((c) => c.id),
+  );
+
   // Vision uses the non-reasoning path (Chat Completions / function calling).
   const model = process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL_REASONING || '';
   const limit = pLimit(CONCURRENCY);
@@ -60,7 +73,8 @@ export async function visionAnalyseComps(state: GraphState): Promise<Partial<Gra
   const updated = await Promise.all(
     comps.map((c) =>
       limit(async (): Promise<Comparable> => {
-        // Idempotency: skip comps already analysed (e.g. on a retry).
+        // Skip the low-similarity tail (cost control) + already-analysed comps.
+        if (!visionIds.has(c.id)) return c;
         if (c.visionAnalysis) return c;
         const photos = (c.photos ?? []).slice(0, MAX_COMP_PHOTOS);
         if (photos.length === 0) return c;
