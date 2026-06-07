@@ -60,6 +60,8 @@ const data: ReportData = {
   floorplans: [],
   compPhotos: {},
   subjectVision: null,
+  streetView: null,
+  streetViewImageDataUrl: null,
 };
 
 describe('renderReportHtml', () => {
@@ -1010,5 +1012,29 @@ describe('Proximity & infrastructure rendering', () => {
   it('omits the proximity section when there is nothing nearby', () => {
     const html = renderReportHtml({ ...data, proximityHazards: null });
     expect(html).not.toContain('Proximity &amp; infrastructure');
+  });
+
+  it('renders the street-level assessment (character, through-traffic, concerns, hero image)', () => {
+    const html = renderReportHtml({
+      ...data,
+      streetView: {
+        streetCharacter: 'arterial',
+        busyRoad: true,
+        treeCover: 'low',
+        neighbouringConcerns: ['bus stop directly outside'],
+      },
+      streetViewImageDataUrl: 'data:image/jpeg;base64,AAAA',
+    });
+    expect(html).toContain('Street-level assessment');
+    expect(html).toContain('Arterial road');
+    expect(html).toContain('Busy / arterial');
+    expect(html).toContain('bus stop directly outside');
+    expect(html).toContain('data:image/jpeg;base64,AAAA');
+    expect(html).toContain('Google Street View');
+  });
+
+  it('omits the street section entirely when there is no assessment and no image', () => {
+    const html = renderReportHtml({ ...data, streetView: null, streetViewImageDataUrl: null });
+    expect(html).not.toContain('Street-level assessment');
   });
 });

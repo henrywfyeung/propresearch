@@ -137,6 +137,12 @@ async function main() {
             }),
           );
           data.compPhotos = Object.fromEntries(compPhotoEntries.filter(([, u]) => u.length > 0));
+          // Street View hero image (mirror Node 13).
+          if (data.streetView && a && process.env.GOOGLE_MAPS_KEY) {
+            const { streetviewUrl } = await import('@/tools/streetview/url');
+            const [hero] = await fetchImagesAsDataUrls([streetviewUrl(a.lat, a.lng, 0)], 1);
+            data.streetViewImageDataUrl = hero ?? null;
+          }
           const html = renderReportHtml(data);
           const browser = await puppeteer.launch({
             executablePath: process.env.CHROME_PATH,

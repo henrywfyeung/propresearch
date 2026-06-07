@@ -21,6 +21,7 @@ const NODE_ORDER = [
   'fetchCandidateComps',
   'visionComps',
   'visionSubject',
+  'streetView',
   'fetchRisks',
   'fetchPlanning',
   'fetchDemographics',

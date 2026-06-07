@@ -50,5 +50,9 @@ export function toReportData(state: GraphState): ReportData | null {
     // Per-comp thumbnails are downloaded by the render node (toReportData is sync).
     compPhotos: {},
     subjectVision: subject.visionAnalysis ?? null,
+    // Street-level read (Node 04c). The hero image is downloaded by the render
+    // node (toReportData is sync, can't fetch).
+    streetView: subject.streetView ?? null,
+    streetViewImageDataUrl: null,
   };
 }

@@ -11,6 +11,7 @@ import { renderReportHtml } from '@/report/render';
 import { toReportData } from '@/report/toReportData';
 import { staticMapDataUrl } from '@/tools/mapbox/staticMap';
 import { uploadPdf } from '@/tools/storage/s3';
+import { streetviewUrl } from '@/tools/streetview/url';
 
 export async function render(state: GraphState): Promise<Partial<GraphState>> {
   const data = toReportData(state);
@@ -93,6 +94,14 @@ export async function render(state: GraphState): Promise<Partial<GraphState>> {
     }),
   );
   data.compPhotos = Object.fromEntries(compPhotoEntries.filter(([, urls]) => urls.length > 0));
+
+  // Street View hero image — one kerb-side heading, as a visual hint beneath the
+  // street-level assessment. Only when 04c produced an assessment (⇒ imagery
+  // exists) and a key is configured; degrades to null otherwise.
+  if (data.streetView && addr && process.env.GOOGLE_MAPS_KEY) {
+    const [hero] = await fetchImagesAsDataUrls([streetviewUrl(addr.lat, addr.lng, 0)], 1);
+    data.streetViewImageDataUrl = hero ?? null;
+  }
 
   // Diagnostic: how many photos arrived in state vs how many actually embedded.
   // A gap (state has N, embedded < N) points at render-time CDN download failures;

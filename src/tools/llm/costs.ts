@@ -51,6 +51,7 @@ export const WORST_CASE_NODE_COST: Record<string, number> = {
   visionSubject: 0.1,
   visionComps: 0.9,
   streetView: 0.04,
+  visionStreetView: 0.04, // alias guard if the node is ever renamed
   planningAndNews: 0.04,
   reasonAndSelect: 1.2,
   triangulate: 0.12,

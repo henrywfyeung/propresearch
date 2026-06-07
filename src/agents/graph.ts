@@ -8,6 +8,7 @@ import { resolveAddress } from '@/agents/nodes/01_resolveAddress';
 import { fetchCandidateComps } from '@/agents/nodes/03_fetchCandidateComps';
 import { visionAnalyseSubject } from '@/agents/nodes/04a_visionAnalyseSubject';
 import { visionAnalyseComps } from '@/agents/nodes/04b_visionAnalyseComps';
+import { streetView } from '@/agents/nodes/04c_streetView';
 import { fetchPlanning } from '@/agents/nodes/05_planningAndNews';
 import { reasonAndSelect } from '@/agents/nodes/06_reasonAndSelect';
 import { triangulate } from '@/agents/nodes/07_triangulate';
@@ -24,16 +25,21 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 // Graph topology (spec §5 / CLAUDE.md §6.2):
 //
 //   START → resolveAddress ─┬→ fetchCandidateComps → visionComps → reasonAndSelect → triangulate ─┐
-//                           ├→ visionSubject ────────────────────────────────────────┤
+//                           ├→ visionSubject → streetView ───────────────────────────┤
 //                           ├→ fetchRisks ──────────────────────────────────────────┤
 //                           ├→ fetchPlanning ────────────────────────────────────────┤
 //                           └→ fetchDemographics ─────────────────────────────────────┴→ compose → render → END
+//
+// streetView is chained AFTER visionSubject (not a parallel branch): both write
+// state.subject and the subject reducer is last-write-wins, so running them in
+// parallel would clobber. Sequencing keeps photos/vision + streetView together.
 
 export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('resolveAddress', resolveAddress)
   .addNode('fetchCandidateComps', fetchCandidateComps)
   .addNode('visionComps', visionAnalyseComps)
   .addNode('visionSubject', visionAnalyseSubject)
+  .addNode('streetView', streetView)
   .addNode('fetchPlanning', fetchPlanning)
   .addNode('fetchRisks', fetchRisks)
   .addNode('fetchDemographics', fetchDemographics)
@@ -59,12 +65,15 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge('fetchCandidateComps', 'visionComps')
   .addEdge('visionComps', 'reasonAndSelect')
   .addEdge('reasonAndSelect', 'triangulate')
-  // compose waits for triangulate, visionSubject, fetchRisks, fetchPlanning,
-  // fetchDemographics, fetchSchools, fetchZoning AND fetchProximity (8-way join)
+  // street-level read runs after the listing-photo read (shared subject write)
+  .addEdge('visionSubject', 'streetView')
+  // compose waits for triangulate, streetView (⇒ visionSubject), fetchRisks,
+  // fetchPlanning, fetchDemographics, fetchSchools, fetchZoning AND
+  // fetchProximity (8-way join)
   .addEdge(
     [
       'triangulate',
-      'visionSubject',
+      'streetView',
       'fetchRisks',
       'fetchPlanning',
       'fetchDemographics',

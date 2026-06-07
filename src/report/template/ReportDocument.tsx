@@ -22,7 +22,7 @@ import {
 import { formatValue, renderClaim } from '@/report/renderClaim';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
 import type { Comparable, RecentDA, RiskFlag, SuburbDemographics } from '@/schemas/state';
-import type { SubjectVision } from '@/schemas/vision';
+import type { StreetView, SubjectVision } from '@/schemas/vision';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 import type { PlanningControls } from '@/tools/planning/zoning';
 import type { ProximityHazards } from '@/tools/proximity/proximity';
@@ -83,6 +83,10 @@ export interface ReportData {
   compPhotos: Record<string, string[]>;
   /** Visual inspection result from node 04a, or null when vision was skipped/failed. */
   subjectVision: SubjectVision | null;
+  /** Street-level assessment from node 04c, or null when skipped/no imagery. */
+  streetView: StreetView | null;
+  /** One Street View hero image (base64 data URL), downloaded by the render node. */
+  streetViewImageDataUrl: string | null;
 }
 
 const ACCENT = '#1F3864';
@@ -194,6 +198,8 @@ export const reportStyles = `
   .location-map { width: 100%; border-radius: 4px; border: 1px solid var(--line); display: block; margin: 0 0 8px; }
   .location-map-link { display: block; text-decoration: none; border: 0; }
   .location-map-caption { font-size: 7.5pt; color: var(--muted); margin: 0 0 6px; }
+  .street-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 4px;
+                border: 1px solid var(--line); display: block; margin: 0 0 8px; }
   .map-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; margin: 0 0 2px; }
   .map-legend-item { display: flex; align-items: center; gap: 7px; font-size: 8.5pt; break-inside: avoid; }
   .map-legend-n { flex: none; width: 15px; height: 15px; line-height: 15px; text-align: center;
@@ -737,6 +743,91 @@ function renderProximity(p: ProximityHazards | null): ReactElement | null {
   );
 }
 
+const STREET_CHARACTER_LABEL: Record<string, string> = {
+  'leafy-residential': 'Leafy residential',
+  arterial: 'Arterial road',
+  'commercial-frontage': 'Commercial frontage',
+  'industrial-adjacent': 'Industrial adjacent',
+  mixed: 'Mixed residential / other',
+};
+const TREE_COVER_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' };
+
+// "Street-level assessment" section (Node 04c). A hero Street View image plus a
+// structured read of the street itself (character, through-traffic, canopy) and
+// any visible concerns. Returns null when no assessment AND no image are present.
+function renderStreetView(sv: StreetView | null, imageDataUrl: string | null): ReactElement | null {
+  if (!sv && !imageDataUrl) return null;
+
+  const children: ReactElement[] = [h('h2', { key: 'h' }, 'Street-level assessment')];
+
+  if (imageDataUrl) {
+    children.push(
+      h('img', {
+        key: 'img',
+        src: imageDataUrl,
+        alt: 'Street View of the street outside the subject property',
+        className: 'street-img',
+      }),
+    );
+  }
+
+  if (sv) {
+    const rows: ReactElement[] = [];
+    const character = STREET_CHARACTER_LABEL[sv.streetCharacter];
+    if (character) {
+      rows.push(
+        h(
+          'div',
+          { key: 'char', className: 'zone-row' },
+          h('span', { className: 'zone-label' }, 'Street'),
+          h('span', { className: 'zone-val' }, character),
+        ),
+      );
+    }
+    rows.push(
+      h(
+        'div',
+        { key: 'traffic', className: 'zone-row' },
+        h('span', { className: 'zone-label' }, 'Through-traffic'),
+        h(
+          'span',
+          { className: 'zone-val' },
+          sv.busyRoad ? 'Busy / arterial — through-traffic likely' : 'Quiet local street',
+        ),
+      ),
+    );
+    rows.push(
+      h(
+        'div',
+        { key: 'trees', className: 'zone-row' },
+        h('span', { className: 'zone-label' }, 'Tree cover'),
+        h('span', { className: 'zone-val' }, TREE_COVER_LABEL[sv.treeCover] ?? sv.treeCover),
+      ),
+    );
+    if (sv.neighbouringConcerns.length > 0) {
+      rows.push(
+        h(
+          'div',
+          { key: 'concerns', className: 'zone-row' },
+          h('span', { className: 'zone-label' }, 'Noted'),
+          h('span', { className: 'zone-val' }, sv.neighbouringConcerns.join('; ')),
+        ),
+      );
+    }
+    children.push(h('div', { key: 'rows', className: 'zoning-block' }, ...rows));
+  }
+
+  children.push(
+    h(
+      'p',
+      { className: 'src', key: 'src' },
+      'Google Street View imagery, assessed at four kerb-side headings. A visual aid only — verify on an in-person inspection.',
+    ),
+  );
+
+  return h('section', { key: 'street' }, ...children);
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const {
     subject,
@@ -757,6 +848,8 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     floorplans,
     compPhotos,
     subjectVision,
+    streetView: streetViewAssessment,
+    streetViewImageDataUrl,
   } = data;
   const selected = comparables.filter(
     (c) => c.selection === 'fair-value' || c.selection === 'negotiation-anchor',
@@ -1097,6 +1190,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
       : null;
 
   const visualInspectionSection = renderVisualInspection(photos, floorplans, subjectVision);
+  const streetSection = renderStreetView(streetViewAssessment, streetViewImageDataUrl);
 
   return h(
     'div',
@@ -1105,6 +1199,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     summary,
     subjectSection,
     locationSection,
+    streetSection,
     schoolsSection,
     proximitySection,
     visualInspectionSection,
