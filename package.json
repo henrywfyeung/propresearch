@@ -43,6 +43,7 @@
     "@sparticuz/chromium": "131.0.0",
     "@supabase/ssr": "0.5.2",
     "@supabase/supabase-js": "2.45.6",
+    "@turf/boolean-point-in-polygon": "7.1.0",
     "ai": "4.0.3",
     "d3": "7.9.0",
     "date-fns": "4.1.0",
@@ -69,6 +70,7 @@
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@types/d3": "7.4.3",
+    "@types/geojson": "7946.0.16",
     "@types/node": "24.0.0",
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",

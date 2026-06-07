@@ -1,53 +1,12 @@
 'use client';
 
+import { NODE_LABELS, NODE_ORDER, type NodeKey } from '@/lib/reportNodes';
 import type { Route } from 'next';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-// ---------------------------------------------------------------------------
-// Stepper label map — exported so it can be unit-tested independently.
-// Keyed by the node names that appear in reports.currentNode.
-// Order matches §15.2 of CLAUDE.md.
-// ---------------------------------------------------------------------------
-
-export const NODE_LABELS: Record<string, string> = {
-  resolveAddress: 'Resolving address…',
-  fetchCandidateComps: 'Finding comparable sales…',
-  visionComps: 'Inspecting comparable photos…',
-  visionSubject: 'Inspecting property photos…',
-  streetView: 'Assessing the street…',
-  fetchRisks: 'Assessing risks…',
-  fetchPlanning: 'Pulling planning activity…',
-  fetchDemographics: 'Gathering suburb demographics…',
-  fetchSchools: 'Finding nearby schools…',
-  fetchZoning: 'Checking zoning & overlays…',
-  fetchProximity: 'Measuring proximity (lines, freeways)…',
-  reasonAndSelect: 'Selecting best comparables…',
-  triangulate: 'Triangulating value…',
-  compose: 'Writing the report…',
-  render: 'Rendering PDF…',
-};
-
-// Ordered list used for the visual stepper.
-export const NODE_ORDER = [
-  'resolveAddress',
-  'fetchCandidateComps',
-  'visionComps',
-  'visionSubject',
-  'streetView',
-  'fetchRisks',
-  'fetchPlanning',
-  'fetchDemographics',
-  'fetchSchools',
-  'fetchZoning',
-  'fetchProximity',
-  'reasonAndSelect',
-  'triangulate',
-  'compose',
-  'render',
-] as const;
-
-export type NodeKey = (typeof NODE_ORDER)[number];
+// Re-exported so existing imports (and report-ui.test) keep resolving from here.
+export { NODE_LABELS, NODE_ORDER, type NodeKey };
 
 /** Returns the label for a given node name, or a formatted fallback. */
 export function labelForNode(node: string | null | undefined): string {

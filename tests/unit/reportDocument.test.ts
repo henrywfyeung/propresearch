@@ -33,6 +33,7 @@ const data: ReportData = {
   demographics: null,
   schools: [],
   hospitals: [],
+  catchments: null,
   planningControls: null,
   proximityHazards: null,
   prose: {
@@ -1036,5 +1037,23 @@ describe('Proximity & infrastructure rendering', () => {
   it('omits the street section entirely when there is no assessment and no image', () => {
     const html = renderReportHtml({ ...data, streetView: null, streetViewImageDataUrl: null });
     expect(html).not.toContain('Street-level assessment');
+  });
+
+  it('renders the school-catchment block, expanding NSW abbreviations + sex labels', () => {
+    const html = renderReportHtml({
+      ...data,
+      catchments: {
+        primary: { school: 'Mosman PS', level: 'primary', catchType: 'PRIMARY' },
+        secondary: { school: 'Mosman HS', level: 'secondary', catchType: 'HIGH_GIRLS' },
+      },
+    });
+    expect(html).toContain('School catchment');
+    expect(html).toContain('Mosman Public School');
+    expect(html).toContain('Mosman High School (girls)');
+    expect(html).toContain('zoned for'); // source caption framing
+  });
+
+  it('omits the catchment block when no zone is known', () => {
+    expect(renderReportHtml({ ...data, catchments: null })).not.toContain('School catchment');
   });
 });

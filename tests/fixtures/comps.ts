@@ -110,6 +110,7 @@ export function graphState(over: Partial<GraphState> = {}): GraphState {
     demographics: null,
     schools: [],
     hospitals: [],
+    catchments: null,
     planningControls: null,
     proximityHazards: null,
     prose: {},

@@ -9,30 +9,10 @@ export const runtime = 'nodejs';
 
 import { getReportStatus } from '@/db/reports';
 import { requireAllowedUser } from '@/lib/auth/user';
-
-// ---------------------------------------------------------------------------
-// Node order for the percentage approximation.
-// Nodes 04a/04b/04c/05/08/09 run concurrently with other fan-out branches;
-// this linear order is intentionally approximate — its only purpose is to
-// drive a progress bar in the UI, not reflect exact graph topology.
-// ---------------------------------------------------------------------------
-const NODE_ORDER = [
-  'resolveAddress',
-  'fetchCandidateComps',
-  'visionComps',
-  'visionSubject',
-  'streetView',
-  'fetchRisks',
-  'fetchPlanning',
-  'fetchDemographics',
-  'fetchSchools',
-  'fetchZoning',
-  'fetchProximity',
-  'reasonAndSelect',
-  'triangulate',
-  'compose',
-  'render',
-] as const;
+// Node order for the percentage approximation lives in a shared module so it
+// can't drift from the client stepper (§15.2). Order is approximate — many
+// nodes run concurrently; its only job is to drive the progress bar.
+import { NODE_ORDER } from '@/lib/reportNodes';
 
 function computePercentage(status: string, currentNode: string | null): number {
   if (status === 'succeeded') return 100;

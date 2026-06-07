@@ -49,6 +49,7 @@ import { GET } from '@/app/api/reports/[id]/route';
 import { POST } from '@/app/api/reports/route';
 import { createReport, getReportStatus, markFailed } from '@/db/reports';
 import { inngest } from '@/inngest/client';
+import { NODE_ORDER } from '@/lib/reportNodes';
 
 const mockCreateReport = vi.mocked(createReport);
 const mockGetReportStatus = vi.mocked(getReportStatus);
@@ -216,11 +217,14 @@ describe('GET /api/reports/[id]', () => {
     expect(json.percentage).toBe(0);
   });
 
-  it('percentage for resolveAddress (index 0) is round(1/14*100) = 7', async () => {
+  it('percentage for the first node (resolveAddress) tracks the node order', async () => {
     mockGetReportStatus.mockResolvedValue({ ...BASE_ROW, currentNode: 'resolveAddress' });
     const res = await GET(new Request('http://localhost'), makeGetParams('rid-1'));
     const json = await res.json();
-    expect(json.percentage).toBe(Math.round((1 / 14) * 100)); // 7 (14-node order)
+    const expected = Math.round(
+      ((NODE_ORDER.indexOf('resolveAddress') + 1) / NODE_ORDER.length) * 100,
+    );
+    expect(json.percentage).toBe(expected);
   });
 
   it('percentage for render (index 9 = last) is 100', async () => {
@@ -234,11 +238,12 @@ describe('GET /api/reports/[id]', () => {
     expect(json.percentage).toBe(100);
   });
 
-  it('percentage for compose (index 12) is round(13/14*100) = 93', async () => {
+  it('percentage for a late node (compose) tracks the node order', async () => {
     mockGetReportStatus.mockResolvedValue({ ...BASE_ROW, currentNode: 'compose' });
     const res = await GET(new Request('http://localhost'), makeGetParams('rid-1'));
     const json = await res.json();
-    expect(json.percentage).toBe(Math.round((13 / 14) * 100)); // 93 (14-node order)
+    const expected = Math.round(((NODE_ORDER.indexOf('compose') + 1) / NODE_ORDER.length) * 100);
+    expect(json.percentage).toBe(expected);
   });
 
   it('percentage is 0 for an unknown currentNode', async () => {

@@ -9,6 +9,7 @@
 // tsconfig uses `jsx: preserve`, which tsx/esbuild won't transform.
 
 import { priceChartSvg } from '@/report/charts/priceChart';
+import { salesTrendChartSvg } from '@/report/charts/salesTrendChart';
 import { selectedMapComps } from '@/report/mapComps';
 import {
   COMP_STYLE,
@@ -26,6 +27,7 @@ import type { StreetView, SubjectVision } from '@/schemas/vision';
 import type { SuburbStats } from '@/tools/market/suburbStats';
 import type { PlanningControls } from '@/tools/planning/zoning';
 import type { ProximityHazards } from '@/tools/proximity/proximity';
+import type { SchoolCatchments } from '@/tools/schools/catchments';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import { type ReactElement, createElement as h } from 'react';
 
@@ -64,6 +66,8 @@ export interface ReportData {
   schools: NearbyFacility[];
   /** Nearby hospitals / medical facilities (Geoscience Australia). */
   hospitals: NearbyPlace[];
+  /** Government school catchment (zoned-for primary + secondary), or null. */
+  catchments: SchoolCatchments | null;
   /** Subject's residential zoning + planning overlays, or null. */
   planningControls: PlanningControls | null;
   /** Nearest transmission line + freeway, or null. */
@@ -828,6 +832,52 @@ function renderStreetView(sv: StreetView | null, imageDataUrl: string | null): R
   return h('section', { key: 'street' }, ...children);
 }
 
+const NSW_CATCHTYPE_LABEL: Record<string, string> = {
+  HIGH_COED: 'co-educational',
+  HIGH_BOYS: 'boys',
+  HIGH_GIRLS: 'girls',
+  CENTRAL_HIGH: 'central school',
+};
+
+// NSW intake-zone names are abbreviated (e.g. "Grafton PS", "Billabong HS");
+// expand the trailing abbreviation for a dossier. VIC names are already full.
+function expandSchoolName(s: string): string {
+  return s.replace(/\bPS$/, 'Public School').replace(/\bHS$/, 'High School');
+}
+
+// "School catchment" section (Node 17) — the GOVERNMENT primary + secondary
+// school the address is zoned for (entitlement), distinct from the nearby-schools
+// proximity list. Returns null when neither level is known.
+function renderCatchments(c: SchoolCatchments | null): ReactElement | null {
+  if (!c || (!c.primary && !c.secondary)) return null;
+  const rows: ReactElement[] = [];
+  const add = (label: string, m: NonNullable<SchoolCatchments['primary']>) => {
+    const typeLabel = m.catchType ? NSW_CATCHTYPE_LABEL[m.catchType] : null;
+    const name = `${expandSchoolName(m.school)}${typeLabel ? ` (${typeLabel})` : ''}`;
+    rows.push(
+      h(
+        'div',
+        { key: label, className: 'zone-row' },
+        h('span', { className: 'zone-label' }, label),
+        h('span', { className: 'zone-val' }, name),
+      ),
+    );
+  };
+  if (c.primary) add('Primary', c.primary);
+  if (c.secondary) add('Secondary', c.secondary);
+  return h(
+    'section',
+    { key: 'catchment' },
+    h('h2', null, 'School catchment'),
+    h('div', { className: 'zoning-block' }, ...rows),
+    h(
+      'p',
+      { className: 'src' },
+      'The government school the address is zoned for (its designated intake zone) — distinct from the nearby-schools list above. Source: NSW / VIC Departments of Education (CC BY). Confirm enrolment eligibility with the school.',
+    ),
+  );
+}
+
 export function ReportDocument({ data }: { data: ReportData }): ReactElement {
   const {
     subject,
@@ -840,6 +890,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     demographics,
     schools,
     hospitals,
+    catchments,
     planningControls,
     proximityHazards,
     staticMapDataUrl: mapDataUrl,
@@ -1022,16 +1073,43 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     );
     return h('div', { key: c.id, className: 'comp' }, ...children);
   });
+  // Recent-sales trend: price-vs-date scatter over the verdict-classified pool
+  // (same comps as the banded chart), with the subject estimate as a reference
+  // line. Omitted automatically when fewer than two dated sales exist.
+  const salesTrendSvg =
+    chartComps.length >= 2
+      ? salesTrendChartSvg({
+          comps: chartComps.map((c) => ({
+            price: c.salePrice,
+            date: c.contractDate,
+            verdict: c.verdict,
+            selection:
+              c.selection === 'negotiation-anchor' || c.selection === 'fair-value'
+                ? c.selection
+                : undefined,
+          })),
+          reconciled: triangulation?.reconciled ?? null,
+        })
+      : '';
   const comparablesSection = h(
     'section',
     { key: 'comparables' },
     h('h2', null, `Comparable sales (${selected.length})`),
     ...paragraphs(prose.comparables),
+    salesTrendSvg
+      ? h('div', {
+          key: 'trend',
+          className: 'chart',
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: trusted SSR'd SVG from salesTrendChartSvg() — numbers + hard-coded literals only, no user HTML.
+          dangerouslySetInnerHTML: { __html: salesTrendSvg },
+        })
+      : null,
     ...compCards,
   );
 
   const marketSection = renderSuburbMarket(suburbStats, prose.market, demographics);
   const schoolsSection = renderSchools(schools, hospitals);
+  const catchmentSection = renderCatchments(catchments);
   const proximitySection = renderProximity(proximityHazards);
 
   const riskSection = h(
@@ -1201,6 +1279,7 @@ export function ReportDocument({ data }: { data: ReportData }): ReactElement {
     locationSection,
     streetSection,
     schoolsSection,
+    catchmentSection,
     proximitySection,
     visualInspectionSection,
     valuation,

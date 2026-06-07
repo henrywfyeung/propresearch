@@ -34,6 +34,7 @@ export function toReportData(state: GraphState): ReportData | null {
     demographics: state.demographics ?? null,
     schools: state.schools ?? [],
     hospitals: state.hospitals ?? [],
+    catchments: state.catchments ?? null,
     planningControls: state.planningControls ?? null,
     proximityHazards: state.proximityHazards ?? null,
     prose: state.prose,

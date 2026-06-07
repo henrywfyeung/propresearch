@@ -218,6 +218,18 @@ const data: ReportData = {
     comment:
       'Well-presented double-storey home with a downstairs bedroom and bathroom; tidy throughout with no obvious defects in the supplied imagery.',
   },
+  compPhotos: {},
+  streetView: {
+    streetCharacter: 'leafy-residential',
+    busyRoad: false,
+    treeCover: 'high',
+    neighbouringConcerns: [],
+  },
+  streetViewImageDataUrl: null,
+  catchments: {
+    primary: { school: 'Example Public School', level: 'primary', catchType: 'PRIMARY' },
+    secondary: { school: 'Example High School', level: 'secondary', catchType: 'HIGH_COED' },
+  },
 };
 
 async function main() {

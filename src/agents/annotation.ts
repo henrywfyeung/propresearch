@@ -15,6 +15,7 @@ import type {
 } from '@/schemas/state';
 import type { PlanningControls } from '@/tools/planning/zoning';
 import type { ProximityHazards } from '@/tools/proximity/proximity';
+import type { SchoolCatchments } from '@/tools/schools/catchments';
 import type { NearbyFacility, NearbyPlace } from '@/tools/schools/ga';
 import { Annotation } from '@langchain/langgraph';
 
@@ -56,6 +57,10 @@ export const GraphAnnotation = Annotation.Root({
   hospitals: Annotation<NearbyPlace[]>({
     reducer: (_c, u) => u,
     default: () => [],
+  }),
+  catchments: Annotation<SchoolCatchments | null>({
+    reducer: (_c, u) => u,
+    default: () => null,
   }),
   planningControls: Annotation<PlanningControls | null>({
     reducer: (_c, u) => u,

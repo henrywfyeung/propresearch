@@ -57,6 +57,7 @@ export const WORST_CASE_NODE_COST: Record<string, number> = {
   triangulate: 0.12,
   fetchRentals: 0.0,
   fetchRisks: 0.0,
+  fetchCatchments: 0.0,
   compose: 0.9,
   critic: 0.4,
   revise: 1.4,

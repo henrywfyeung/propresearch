@@ -19,6 +19,7 @@ import { render } from '@/agents/nodes/13_render';
 import { fetchSchools } from '@/agents/nodes/14_fetchSchools';
 import { fetchZoning } from '@/agents/nodes/15_fetchZoning';
 import { fetchProximity } from '@/agents/nodes/16_fetchProximity';
+import { fetchCatchments } from '@/agents/nodes/17_fetchCatchments';
 import { runWithReportContext } from '@/agents/reportContext';
 import { END, START, StateGraph } from '@langchain/langgraph';
 
@@ -46,6 +47,7 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addNode('fetchSchools', fetchSchools)
   .addNode('fetchZoning', fetchZoning)
   .addNode('fetchProximity', fetchProximity)
+  .addNode('fetchCatchments', fetchCatchments)
   .addNode('reasonAndSelect', reasonAndSelect)
   .addNode('triangulate', triangulate)
   .addNode('compose', compose)
@@ -60,6 +62,7 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   .addEdge('resolveAddress', 'fetchSchools')
   .addEdge('resolveAddress', 'fetchZoning')
   .addEdge('resolveAddress', 'fetchProximity')
+  .addEdge('resolveAddress', 'fetchCatchments')
   // comp vision runs after the candidate pool is built, before selection so the
   // verdicts + Size/Layout/Condition comparison are vision-grounded
   .addEdge('fetchCandidateComps', 'visionComps')
@@ -68,8 +71,8 @@ export const reportGraph = new StateGraph(GraphAnnotation)
   // street-level read runs after the listing-photo read (shared subject write)
   .addEdge('visionSubject', 'streetView')
   // compose waits for triangulate, streetView (⇒ visionSubject), fetchRisks,
-  // fetchPlanning, fetchDemographics, fetchSchools, fetchZoning AND
-  // fetchProximity (8-way join)
+  // fetchPlanning, fetchDemographics, fetchSchools, fetchZoning, fetchProximity
+  // AND fetchCatchments (9-way join)
   .addEdge(
     [
       'triangulate',
@@ -80,6 +83,7 @@ export const reportGraph = new StateGraph(GraphAnnotation)
       'fetchSchools',
       'fetchZoning',
       'fetchProximity',
+      'fetchCatchments',
     ],
     'compose',
   )
