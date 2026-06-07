@@ -162,15 +162,23 @@ describe('compose', () => {
     expect(mockLlm).not.toHaveBeenCalled();
   });
 
-  it('degrades each section to a placeholder when the LLM is unavailable (no throw)', async () => {
+  it('degrades a single failed section to a placeholder (no throw)', async () => {
+    mockLlm.mockReset();
+    mockLlm.mockImplementation(async (opts: { node: string }) => {
+      if (opts.node === 'compose:risks') throw new Error('boom');
+      return { blocks: [{ type: 'text', text: 'ok prose' }] } as never;
+    });
+    const out = await compose(graphState({ triangulation: tri }));
+    // The one failed section falls back to a note; the rest are fine; the
+    // structured valuation range claim is still stamped from triangulation.
+    expect(JSON.stringify(out.prose?.risks)).toContain('could not be generated');
+    expect(out.prose?.summary?.[0]?.type).toBe('text');
+    expect(out.prose?.valuation?.[0]?.type).toBe('range');
+  });
+
+  it('throws (retryable) when MOST sections fail — LLM broadly unavailable', async () => {
     mockLlm.mockReset();
     mockLlm.mockRejectedValue(new Error('LLM_PROVIDERS_UNAVAILABLE'));
-    const out = await compose(graphState({ triangulation: tri }));
-    // Does not throw; every prose section falls back to a short note, and the
-    // structured valuation range claim is still stamped from triangulation.
-    const summary = out.prose?.summary;
-    expect(summary?.[0]?.type).toBe('text');
-    expect(JSON.stringify(summary)).toContain('could not be generated');
-    expect(out.prose?.valuation?.[0]?.type).toBe('range');
+    await expect(compose(graphState({ triangulation: tri }))).rejects.toThrow();
   });
 });

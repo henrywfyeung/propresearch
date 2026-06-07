@@ -273,9 +273,16 @@ export async function callWithFallback<T>(opts: StructuredCallOpts<T>): Promise<
     );
     const fallbackModel = process.env.ANTHROPIC_MODEL_FALLBACK;
     if (!fallbackModel) {
-      throw new LlmProvidersUnavailableError('ANTHROPIC_MODEL_FALLBACK not configured', {
-        cause: String(openaiErr),
-      });
+      // Distinguish quota exhaustion (a billing action) from a generic outage so
+      // the failure reads as "top up", not "debug the code".
+      const oerr = String(openaiErr);
+      const quota = /exceeded your current quota|insufficient_quota|429/i.test(oerr);
+      throw new LlmProvidersUnavailableError(
+        quota
+          ? 'OpenAI quota exceeded and no Anthropic fallback configured — top up OpenAI credits or set ANTHROPIC_MODEL_FALLBACK'
+          : 'ANTHROPIC_MODEL_FALLBACK not configured',
+        { cause: oerr, quota },
+      );
     }
     try {
       const started = Date.now();

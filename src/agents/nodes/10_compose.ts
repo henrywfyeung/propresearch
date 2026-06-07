@@ -3,6 +3,7 @@
 // claim deterministically from state.triangulation.
 
 import type { GraphState } from '@/agents/annotation';
+import { LlmProvidersUnavailableError } from '@/lib/errors';
 import { logger } from '@/lib/observability/logger';
 import { type ComposeInput, type ComposeSection, buildMessages, version } from '@/prompts/compose';
 import type { ClaimBlock, ReportProse } from '@/schemas/claims';
@@ -66,6 +67,12 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
   // deterministically rather than letting the LLM infer a "stable area" from it.
   const planningAvailable = resolvedAddress?.state === 'NSW';
 
+  // Tolerate a single section hiccup (placeholder), but if MOST sections fail
+  // the LLM is broadly down — fail the report (retryable) rather than ship
+  // mostly-hollow prose. [R-reliability]
+  let failures = 0;
+  const llmSectionCount = SECTIONS.filter((s) => !(s === 'planning' && !planningAvailable)).length;
+
   const entries = await Promise.all(
     SECTIONS.map(async (section): Promise<[ComposeSection, ClaimBlock[]]> => {
       if (section === 'planning' && !planningAvailable) {
@@ -94,6 +101,7 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
         });
         return [section, out.blocks];
       } catch (err) {
+        failures += 1;
         logger.warn({ err: String(err), section }, 'compose: section failed; using placeholder');
         return [
           section,
@@ -107,6 +115,13 @@ export async function compose(state: GraphState): Promise<Partial<GraphState>> {
       }
     }),
   );
+
+  if (failures > llmSectionCount / 2) {
+    throw new LlmProvidersUnavailableError(
+      `compose: ${failures}/${llmSectionCount} sections failed — LLM unavailable`,
+      { failures, llmSectionCount },
+    );
+  }
 
   const prose = Object.fromEntries(entries) as ReportProse;
 
