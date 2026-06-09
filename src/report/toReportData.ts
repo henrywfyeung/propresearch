@@ -1,0 +1,59 @@
+// src/report/toReportData.ts — map graph state into the report template's ReportData.
+
+import type { GraphState } from '@/agents/annotation';
+import type { ReportData } from '@/report/template/ReportDocument';
+import { interactiveMapHref } from '@/tools/mapbox/staticMap';
+import { computeSuburbStats } from '@/tools/market/suburbStats';
+
+export function toReportData(state: GraphState): ReportData | null {
+  const a = state.resolvedAddress;
+  const subject = state.subject;
+  if (!a || !subject) return null;
+
+  const t = state.triangulation;
+  return {
+    address: a.normalizedAddress,
+    suburb: a.suburb,
+    state: a.state,
+    postcode: a.postcode,
+    subject: subject.attrs,
+    triangulation: t
+      ? {
+          low: t.low,
+          high: t.high,
+          reconciled: t.reconciled,
+          confidence: t.confidence,
+          uncertaintyNote: t.uncertaintyNote,
+          bands: t.bands ?? null,
+        }
+      : null,
+    comparables: state.comparables,
+    risks: state.risks ?? [],
+    recentDAs: state.market?.recentDAs ?? [],
+    suburbStats: computeSuburbStats(state.comparables),
+    demographics: state.demographics ?? null,
+    schools: state.schools ?? [],
+    hospitals: state.hospitals ?? [],
+    catchments: state.catchments ?? null,
+    planningControls: state.planningControls ?? null,
+    proximityHazards: state.proximityHazards ?? null,
+    prose: state.prose,
+    generatedAt: new Date().toISOString(),
+    // Populated by the render node after fetching the static map.
+    staticMapDataUrl: null,
+    // Interactive Google Maps link the PDF map image points at (PDF can't host a
+    // live map, but the static image becomes a clickable link annotation).
+    mapHref: interactiveMapHref({ lat: a.lat, lng: a.lng }),
+    // photos + floorplans are initialised empty here; the render node overrides
+    // them with downloaded base64 data URLs (toReportData is sync, can't fetch).
+    photos: [],
+    floorplans: [],
+    // Per-comp thumbnails are downloaded by the render node (toReportData is sync).
+    compPhotos: {},
+    subjectVision: subject.visionAnalysis ?? null,
+    // Street-level read (Node 04c). The hero image is downloaded by the render
+    // node (toReportData is sync, can't fetch).
+    streetView: subject.streetView ?? null,
+    streetViewImageDataUrl: null,
+  };
+}

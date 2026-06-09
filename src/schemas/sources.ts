@@ -6,9 +6,9 @@
 import { z } from 'zod';
 
 export const ProviderSchema = z.enum([
-  'domain',
+  'rea', // realestate.com.au via the realty-base-au RapidAPI proxy (comp source)
   'nsw-vg',
-  'domain+nsw-vg', // merged comp per the NSW VG vs Domain tiebreaker [R40]
+  'rea+nsw-vg', // merged comp: REA attrs/photos + NSW VG authoritative price (spec §5.4)
   'mapbox',
   'street-view',
   'nsw-planning',
@@ -23,10 +23,10 @@ export const SourceRefSchema = z.object({
   provider: ProviderSchema,
   endpoint: z.string(),
   fetchedAt: z.string().datetime(),
-  // JSON Pointer into ReportState, e.g. "/subject/domainAvm/mid".
+  // JSON Pointer into ReportState, e.g. "/comparables/0/salePrice".
   // Required — `raw` is stripped before persistence, so this is the only way
   // the critic can resolve a claim back to its source value. [R22]
-  path: z.string().regex(/^(\/[^/]+)+$/, 'must be a JSON Pointer like /subject/domainAvm/mid'),
+  path: z.string().regex(/^(\/[^/]+)+$/, 'must be a JSON Pointer like /comparables/0/salePrice'),
   // dev-mode only; stripped before persistence (§4.3).
   raw: z.unknown().optional(),
 });

@@ -18,6 +18,7 @@ vi.mock('@/db/client-worker', () => ({
 }));
 
 import { __setModelRunner, callWithFallback, structuredCall } from '@/tools/llm/structuredCall';
+import type { StructuredCallOpts } from '@/tools/llm/types';
 
 const schema = z.object({ answer: z.string() });
 const baseOpts = {
@@ -87,5 +88,52 @@ describe('callWithFallback', () => {
     await expect(
       runWithReportContext({ reportId: 'r4' }, () => callWithFallback(baseOpts)),
     ).rejects.toBeInstanceOf(LlmProvidersUnavailableError);
+  });
+});
+
+describe('toLangchainMessages — multimodal content', () => {
+  it('passes array content through to the model runner unchanged', async () => {
+    // The __setModelRunner seam receives the opts as-is, so we can inspect
+    // what messages were passed after toLangchainMessages processed them.
+    // We verify the runner receives the multimodal message by checking that
+    // structuredCall completes without error when content is an array.
+    const capturedOpts: StructuredCallOpts<unknown>[] = [];
+    __setModelRunner(async (_p, _m, opts) => {
+      capturedOpts.push(opts);
+      return { parsed: { answer: 'ok' }, usage: { promptTokens: 1, completionTokens: 1 } };
+    });
+
+    const multimodalOpts = {
+      ...baseOpts,
+      messages: [
+        { role: 'system' as const, content: 'You are an inspector.' },
+        {
+          role: 'user' as const,
+          content: [
+            { type: 'text' as const, text: 'Inspect these photos.' },
+            { type: 'image_url' as const, image_url: { url: 'https://example.com/photo.jpg' } },
+          ],
+        },
+      ],
+    };
+
+    const out = await runWithReportContext({ reportId: 'r5' }, () =>
+      structuredCall(multimodalOpts),
+    );
+    expect(out.answer).toBe('ok');
+
+    // The opts were forwarded to the runner — the multimodal message is preserved
+    const forwardedMessages = capturedOpts[0]?.messages;
+    expect(forwardedMessages).toHaveLength(2);
+    expect(Array.isArray(forwardedMessages?.[1]?.content)).toBe(true);
+  });
+
+  it('keeps string content working unchanged (no regression)', async () => {
+    __setModelRunner(async (_p, _m, _opts) => ({
+      parsed: { answer: 'string-ok' },
+      usage: { promptTokens: 1, completionTokens: 1 },
+    }));
+    const out = await runWithReportContext({ reportId: 'r6' }, () => structuredCall(baseOpts));
+    expect(out.answer).toBe('string-ok');
   });
 });

@@ -1,32 +1,67 @@
-# CLAUDE.md — AI Property Due-Diligence Platform
+# CLAUDE.md — PropResearch (personal NSW+VIC property research assistant)
 
 > **Audience:** Claude Code (and any future contributor). This file is the
-> ground-truth project context for the *buyers-agent-tool* monorepo. It is a
-> restructured version of `engineering_spec_refined.docx` (v1.1), kept in the
-> repo so it stays under version control and is read on every Claude Code
-> session start.
+> ground-truth project context for the *propresearch* monorepo. It is read on
+> every Claude Code session start.
 >
 > Where the spec carried `[Refinement]` / `[Rxx]` notes, they are retained
 > in-line so the rationale for non-obvious choices isn't lost.
+
+> ## ⚠️ v2 ARCHITECTURE PIVOT (authoritative — supersedes conflicting text below)
+>
+> The project pivoted from a **3-agent commercial due-diligence tool built on
+> the Domain API** to a **single-user, personal property-research assistant**
+> covering **both NSW and VIC**, built on **free/openly-licensed data sources**
+> with **human-in-the-loop listing selection**. Two reasons drove this:
+>
+> 1. **Domain's API T&Cs (11 Dec 2025) are incompatible with an AI pipeline.**
+>    Clause 7.6(d) prohibits disclosing API data to third parties (we'd send it
+>    to OpenAI/Anthropic); 7.6(j) prohibits storing/using it outside Australia
+>    (US LLMs, EU Langfuse); 7.6(g)+9.1(d) prohibit Derivative Works (our
+>    report is one, and any consented derivative's IP vests in Domain). Clause
+>    13.2 removes the liability cap for 7.6 breaches → uncapped exposure. So
+>    Domain data simply cannot flow through our LLM nodes. See §4.3.
+> 2. **Personal use + free data is cleaner and cheaper.** Government open data
+>    (NSW VG, VIC VPSR, VicPlan/Vicmap, NSW WFS, ABS) carries no third-party /
+>    residency / derivative restrictions — it can be warehoused and AI-processed
+>    freely. The product analyses properties the *user themselves* selects while
+>    browsing, rather than harvesting a portal.
+>
+> **Where older sections below still say "three buyer's agents", "Domain as
+> primary data source", "AVM", "negotiation pack", or "Phase 1 Sydney only",
+> they are superseded by this banner, §0, §1 and §4.3.** The *engineering
+> machinery* (LangGraph + Inngest, checkpointer, merge-by-key reducers, the
+> structured-claim → deterministic-critic pipeline, cost ceiling, PDF
+> rendering, auth) carries over unchanged; only the **data layer and framing**
+> change. The Domain client code (`src/tools/domain/*`) is now out-of-scope and
+> slated for removal. `[R52]`
 
 ---
 
 ## 0. Project overview
 
-A web-only internal tool used by **three named buyer's agents** to produce
-**6–10 page professionally-rendered PDF due-diligence reports** for Australian
-residential properties.
+A web-only **personal** tool used by **a single owner** to research
+**residential properties they are personally considering buying** in **NSW and
+VIC**, producing a **6–10 page PDF research dossier** per property.
 
-- **Input:** an Australian residential property address
-- **Output:** a PDF dossier covering subject property, AVM-derived value range,
-  6–8 selected comparable sales (with vision-augmented adjustment reasoning),
-  rental evidence, suburb market context, risk register (flood / bushfire /
-  heritage / noise / planning / market), and a negotiation evidence pack
-  (signals, suggested opening offer, walk-away price).
+- **Input:** a property the user is personally evaluating — they provide the
+  address (and optionally the listing details / photos they are viewing). The
+  tool does **not** harvest or fetch listings from any proprietary portal; the
+  human selects what to analyse while browsing normally.
+- **Output:** a PDF dossier covering the subject property, a **comp-derived
+  value range** (NSW: real per-comp sold records; VIC: suburb-median context
+  + optional per-property LANDATA report + user-supplied comps), suburb market
+  context (NSW VG / VIC VPSR trends), a risk register (flood / bushfire /
+  heritage / planning / noise), street-level assessment (Street View), and a
+  **"fit against my criteria"** assessment + side-by-side comparison of the
+  user's shortlist.
+- **No AVM, no rental-yield triangulation, no negotiation pack in v1** — those
+  leaned on Domain's proprietary AVM/listing/rental data, which is out (§4.3).
+  The comp-derived value range *is* our valuation; the divergence guardrail
+  (§7.9) still applies across the value signals we do have.
 - **Latency budget:** ≤ 5 min / report. **Quality is the optimisation
   target, not speed.**
-- **Geographic phasing:** Phase 1 Sydney metro (NSW); Phase 2 Melbourne (VIC);
-  Phase 3 Perth (WA). Non-Phase-1 addresses return `UnsupportedRegionError`.
+- **Geographic scope:** **NSW and VIC**, both first-class. WA deferred.
 
 ---
 
@@ -73,12 +108,19 @@ with a defined degraded mode for others.
 - Custom AVM model training
 - Real-time collaboration
 - CRM integration
-- **Scraping of any proprietary listing portal (Domain, REA, etc.).**
-  Public-data ingestions (NSW VG ZIPs, council DA JSON feeds, NSW SES / RFS
-  WFS) **are** in scope but are schema-fragile and treated as such.
+- **Any Domain (or other proprietary-portal) data ingestion — API *or*
+  scraping.** Both are out: the API because its T&Cs forbid the LLM pipeline
+  (§4.3), scraping because it breaches site T&Cs + copyright. The product
+  works on free/open data + user-supplied listing details only.
+- **AVM, rental-yield triangulation, negotiation pack** — Domain-data-dependent;
+  removed from v1 (§0).
+- Automated harvesting of listings by filter. The user selects listings while
+  browsing normally and hands them to the tool.
 
-> `[Edit]` The out-of-scope clause bans proprietary-portal scraping, not
-> public-data ingestion (which we depend on).
+> `[R52]` The out-of-scope clause now bans Domain entirely (API and scraping),
+> not just scraping. Public/open data ingestion (NSW VG, VIC VPSR,
+> VicPlan/Vicmap, NSW WFS, ABS) is what we depend on; it is schema-fragile and
+> treated as such.
 
 ---
 
@@ -288,44 +330,64 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
   partial progress inside a single node would otherwise be lost. See
   §6.3 and `[R21]`.
 
-### 4.3 Domain TOS compliance — data-model guardrails
+### 4.3 Data sourcing & legal posture (why Domain is out) `[R52]`
 
-Domain's TOS prohibits storing listing data in a way that creates a queryable
-cache. Our compliance model:
+**The Domain decision.** We reviewed Domain's API T&Cs (last updated 11 Dec
+2025) clause-by-clause and concluded the Domain API **cannot lawfully feed our
+AI pipeline**. The blocking clauses:
 
-1. `reports.state` is a **point-in-time snapshot tied to a single report**. It
-   is only ever fetched by primary key (`reports.id`).
-2. **Defense-in-depth, not a single control.** The application connects
-   as a dedicated `api_reader` Postgres role with no DDL, no `SELECT` on
-   admin or ingest tables, and no write access to `nsw_vg_sales`.
-   Postgres permissions alone **cannot** enforce "by-id-only queries
-   against `reports`" — once `SELECT` is granted, any `WHERE` clause is
-   legal. The *real* enforcement is point 3 below; the role limits the
-   blast radius if 3 is bypassed. `[R26]`
-3. **Custom ESLint rule + code review** is the primary control.
-   Cross-report analytical queries are explicitly forbidden. Drizzle
-   queries against `reports` **must** include `.where(eq(reports.id, …))`
-   *unless* they only touch denormalised top-level columns (`status`,
-   `createdAt`, `userId`, `subjectAddress`). The ESLint rule flags any
-   `db.select(...).from(reports)` whose chain references `reports.state`
-   without an `id` predicate, with no allow-list exceptions.
-4. **State retention:** `reports.state` is purged 90 days after status becomes
-   `succeeded` or `superseded`. A nightly Inngest cron does the purge.
-   `pdfUrl` + `reports` row remain (no listing data).
-5. `audit_log.details` stores **only IDs** (report id, user id, node names,
-   status, costs). No listing fields. Audited via a Zod schema applied at
-   the write site.
-6. Suburb-stats responses are kept only in-process (per request).
-   NSW VG bulk PSI is government open data and is fine to persist long-term.
-7. **OpenAI vision transmission:** Domain photo URLs are passed to OpenAI
-   vision for nodes 04a/04b/04c. This is a transmission to a third party.
-   **Before launch, confirm in writing with Domain** that vision-augmented
-   analysis of Domain-hosted media is permitted under the API tier we hold.
-   If not, fall back to text-only comp analysis.
+- **7.6(d)** — must not "disclose... or otherwise make the API Product(s) or
+  Our Content available to any third party." Sending listing data/photos to
+  OpenAI or Anthropic is third-party disclosure.
+- **7.6(j)** — must not "access, use, and/or store the API Product(s) or
+  otherwise make available the API Data **outside of Australia**." US LLMs
+  (OpenAI/Anthropic), EU Langfuse, US/EU Sentry all receive offshore.
+- **7.6(g) + 9.1(d)** — must not create a **Derivative Work** ("a work or
+  product that uses and/or is derived from the API Data"). Our report is a
+  derivative; even *with* written consent the derivative's IP **vests in
+  Domain**.
+- **13.2** — the AUD $5,000 liability cap **does not apply** to 7.6 breaches →
+  **uncapped liability** + indemnity (13.7).
 
-`[R3]` Original §4.3 stated the snapshot interpretation as fact. We now have
-an explicit guardrail (role + lint rule), a retention rule, and a flagged
-TODO for Domain sign-off on vision transmission.
+Scraping Domain/REA is also out: it breaches their site T&Cs + circumvents
+technical protections (Akamai), reproduces copyrighted photos/descriptions,
+and 5.8 of the API T&Cs even *requires* customers to run anti-scraping
+software. Neither route is viable. **Conclusion: no Domain data, period.**
+
+**What we use instead** — free/open or permissively-licensed data only (§1.6).
+NSW VG and VIC VPSR are government open data (VPSR is CC BY 4.0); VicPlan,
+Vicmap, NSW WFS, ABS likewise. These carry **no third-party, residency, or
+derivative restrictions** — we can warehouse them, send them to LLMs, and
+derive reports freely (attribution where the licence asks). Listing-specific
+details (photos, current asking price) come **only from the user**, who
+provides them for properties they are personally researching — ordinary
+personal use, not portal ingestion.
+
+**Data-model guardrails (retained, now lighter-stakes):**
+
+1. `reports.state` is a **point-in-time snapshot tied to a single report**,
+   fetched only by primary key (`reports.id`). With no Domain data in scope
+   the TOS-cache concern is moot, but by-id-only access remains good hygiene
+   for user-supplied listing content + privacy.
+2. The `api_reader` Postgres role (no DDL, no admin/ingest SELECT, no
+   `nsw_vg_sales` write) remains as defense-in-depth. `[R26]`
+3. The **cross-row query ESLint guard** (`scripts/check-no-unkeyed-reports-query.ts`)
+   remains — queries touching `reports.state` need an `id` predicate; only
+   denormalised top-level columns (`status`, `createdAt`, `userId`,
+   `subjectAddress`) may be queried across rows. `[R26]`
+4. **State retention:** `reports.state` purged 90 days after `succeeded` /
+   `superseded` (nightly Inngest cron). PDF + row remain.
+5. `audit_log.details` stores **only IDs**. No listing fields. Zod-validated
+   at the write site.
+6. **Data residency.** Free gov data has no residency requirement, but
+   **user-supplied listing photos/details are PII-adjacent** and the pipeline
+   still sends them to US LLMs. This is acceptable for a single personal user
+   analysing their own purchase (their own data, their own consent), but is
+   documented so it's a conscious choice, not an accident. (`[R49]` Sentry/
+   Langfuse PII scrubbing still applies.)
+
+> Supersedes the old "Domain TOS compliance" framing, the OpenAI-vision
+> sign-off TODO (moot — no Domain photos), and the F5 Domain sign-off gate.
 
 ---
 
@@ -1480,9 +1542,18 @@ SUPABASE_SECRET_KEY=sb_secret_...
 # `anon` JWT (now → publishable) and `service_role` JWT (now → secret).
 # `@supabase/supabase-js >= 2.45` and `@supabase/ssr >= 0.4` support both formats.
 
-# Domain
-DOMAIN_API_KEY=...
-DOMAIN_STATS_CALLBACK_URL=...
+# Domain — REMOVED in v2 ([R52]). No Domain API/credentials; src/tools/domain/*
+# is out-of-scope and slated for deletion. Do not re-introduce.
+
+# Data sources (v2) — mostly keyless gov open data fetched at runtime:
+#   NSW VG weekly PSI (public ZIP), VIC VPSR (data.vic.gov.au, CC BY 4.0),
+#   VicPlan/Vicmap WFS, NSW Planning Portal + NSW Spatial WFS, ABS.
+# Only the ones needing a key/endpoint are listed here.
+NSW_VG_PSI_INDEX_URL=...                    # NSW VG weekly PSI listing page (schema-fragile)
+VIC_VPSR_DATASET_URL=...                    # data.vic.gov.au VPSR time-series resource
+# LANDATA (optional, VIC per-property paid comp lookup, [R54]) — user-triggered,
+# per-property only; NOT a bulk subscription. Configure if/when used.
+LANDATA_API_KEY=...                         # optional; leave blank to disable VIC paid comps
 
 # LLM
 OPENAI_API_KEY=...
@@ -1686,3 +1757,15 @@ export const ReasonSelectOutput = z.object({
 | R49 | Sentry PII scrubbing for address / state / listing fields | §14.1 |
 | R50 | User offboarding deletion path (`purgeUserData`) | §10.1.1 |
 | R51 | Firm-wide 24h dedupe dialog at New Report (`domainPropertyId` denormalised) | §4.2, §15.1.2 |
+| **R52** | **v2 pivot: Domain removed entirely (API T&Cs incompatible with LLM pipeline); free/open data only; personal single-user** | banner, §0, §1.1, §1.5, §4.3, §16.1 |
+| **R53** | **NSW + VIC both first-class (no phasing); council-DA-LGA-parity gate dropped; NSW Planning + VicPlan statewide** | §1.3 |
+| **R54** | **VIC per-comp via optional user-triggered LANDATA per-property report (not bulk subscription) + user-supplied comps; free VPSR aggregates for trend context** | §1.1, §1.6, §16.1 |
+| **R55** | **Human-in-the-loop listing input (user pastes listing + uploads photos for properties they're personally researching); no portal harvesting; Street View as rendered image, interior-photo vision is user-supplied + optional** | §0, §1.1, §1.6 |
+
+> **v2 supersession note:** R51 (Domain dedupe), R37/R38/R39/R40 (Domain stats
+> callbacks, attribution, NSW-VG-vs-Domain tiebreaker), R43 (Domain AVM
+> confidence), the F5 Domain sign-off gate, and the AVM / rental-triangulation /
+> negotiation-pack features are all **superseded or moot under R52** (no Domain
+> data). They remain documented below for history; the v2 banner + §0/§1/§4.3
+> govern. The resumption/cost/critic/reducer machinery (R1, R2, R20–R24, R29,
+> R30) is unaffected and still current.
