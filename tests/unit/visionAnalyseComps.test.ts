@@ -19,7 +19,12 @@ const SAMPLE_VISION = {
   },
 };
 
-afterEach(() => mockLlm.mockReset());
+afterEach(() => {
+  mockLlm.mockReset();
+  // Reset the cost-control knob so later tests get the default top-K. Empty
+  // string (not `delete` — biome noDelete) still falls back: Number('')||14 = 14.
+  process.env.VISION_COMPS_TOPK = '';
+});
 
 const withPhotos = (id: string) =>
   sampleComparable(id, { photos: [`https://cdn/${id}-1.jpg`, `https://cdn/${id}-2.jpg`] });
@@ -48,7 +53,6 @@ describe('visionAnalyseComps', () => {
     expect(mockLlm).toHaveBeenCalledTimes(2); // only the top-2 by similarity
     expect(out.comparables?.find((c) => c.id === 'lo')?.visionAnalysis).toBeNull();
     expect(out.comparables?.find((c) => c.id === 'hi1')?.visionAnalysis?.condition).toBe('good');
-    delete process.env.VISION_COMPS_TOPK;
   });
 
   it('skips comps with no photos without calling the LLM', async () => {
