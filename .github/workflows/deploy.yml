@@ -1,0 +1,95 @@
+# Production CD — every push to main runs the test gate, then builds and deploys
+# to Vercel via the CLI. Codified here (not the Vercel Git integration) so the
+# whole pipeline lives in the repo.
+#
+# DORMANT UNTIL CONFIGURED: the `deploy` job is skipped (workflow stays green)
+# until VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are set as repo secrets.
+# So merging this file does not fail before Vercel setup is done. See docs/deploy.md.
+
+name: Deploy (production)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # manual redeploy from the Actions tab
+
+# Never run two production deploys at once; don't cancel one mid-flight.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # Secrets can't be read in a job-level `if:`, so surface their presence as an
+  # output. ready=false → the deploy job is skipped cleanly (no red X).
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.s.outputs.ready }}
+    steps:
+      - id: s
+        env:
+          T: ${{ secrets.VERCEL_TOKEN }}
+          O: ${{ secrets.VERCEL_ORG_ID }}
+          P: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -n "$T" ] && [ -n "$O" ] && [ -n "$P" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Vercel secrets not set — skipping deploy. Add VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (see docs/deploy.md)."
+          fi
+
+  deploy:
+    needs: check
+    if: needs.check.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Defence-in-depth: a direct push to main (bypassing a PR) can't ship a
+      # broken build. Mirrors ci.yml.
+      - name: Lint
+        run: pnpm lint
+      - name: TypeScript
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # Pulls project settings + the production env vars set in the Vercel
+      # dashboard into .vercel/ so `vercel build` can embed NEXT_PUBLIC_* etc.
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt to production
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed → $url"
