@@ -49,16 +49,17 @@ export function buildPostBody(values: NewReportFormValues): NewReportBody {
 // Component
 // ---------------------------------------------------------------------------
 
+// `value` MUST stay in sync with CanonicalPropertyTypeSchema (src/schemas/state.ts) —
+// it's what buildSubject validates; `label` is display-only. Earlier this list had
+// values like 'Apartment'/'Terrace'/'Rural' that aren't in the canonical vocab, so
+// picking them failed buildSubject downstream.
 const PROPERTY_TYPES = [
-  'House',
-  'Apartment',
-  'Townhouse',
-  'Villa',
-  'Terrace',
-  'DuplexSemi',
-  'Land',
-  'Rural',
-  'Other',
+  { value: 'House', label: 'House' },
+  { value: 'ApartmentUnitFlat', label: 'Apartment / Unit / Flat' },
+  { value: 'Townhouse', label: 'Townhouse' },
+  { value: 'Villa', label: 'Villa' },
+  { value: 'Land', label: 'Land' },
+  { value: 'Other', label: 'Other' },
 ] as const;
 
 export function NewReportForm() {
@@ -136,8 +137,8 @@ export function NewReportForm() {
           className="w-full rounded-md border border-black/15 bg-bg-card px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
         >
           {PROPERTY_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
+            <option key={t.value} value={t.value}>
+              {t.label}
             </option>
           ))}
         </select>

@@ -43,7 +43,10 @@ export async function POST(req: Request): Promise<Response> {
   try {
     await inngest.send({
       name: 'reports/generate.requested',
-      data: { reportId, userId, rawAddress, rawSubject: subject },
+      // buildSubject expects { attrs, photos } (the CLI shape). The form posts a
+      // flat attrs object; wrap it here. photos start empty — Node 04a auto-fetches
+      // the REA listing photos at run time (user photo upload is a later increment).
+      data: { reportId, userId, rawAddress, rawSubject: { attrs: subject, photos: [] } },
     });
   } catch (err) {
     // Don't leave a perpetually-'queued' orphan row if the enqueue fails (e.g. a

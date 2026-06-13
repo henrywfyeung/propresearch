@@ -113,7 +113,7 @@ describe('POST /api/reports', () => {
         reportId: 'rid-1',
         userId: 'u1',
         rawAddress: VALID_BODY.rawAddress,
-        rawSubject: VALID_BODY.subject,
+        rawSubject: { attrs: VALID_BODY.subject, photos: [] },
       },
     });
   });
