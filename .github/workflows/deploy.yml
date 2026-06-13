@@ -79,17 +79,15 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Pulls project settings + the production env vars set in the Vercel
-      # dashboard into .vercel/ so `vercel build` can embed NEXT_PUBLIC_* etc.
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-
-      - name: Build
-        run: vercel build --prod --token="$VERCEL_TOKEN"
-
-      - name: Deploy prebuilt to production
+      # Cloud build (NOT --prebuilt): upload the source and let Vercel build it.
+      # This is the only way NEXT_PUBLIC_* vars inline correctly — they're baked
+      # in at build time, and Vercel injects the project's env vars into its own
+      # build, whereas a local `vercel build` does not see them. The lint/
+      # typecheck/test gate above is our build-correctness check; Vercel does the
+      # production build. VERCEL_ORG_ID/VERCEL_PROJECT_ID (job env) target the project.
+      - name: Deploy to production (Vercel cloud build)
         id: deploy
         run: |
-          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          url="$(vercel deploy --prod --yes --token="$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed → $url"
