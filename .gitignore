@@ -38,3 +38,4 @@ drizzle/.drizzle-cache/
 # TypeScript build cache / generated d.ts
 tsconfig.tsbuildinfo
 next-env.d.ts
+.vercel
