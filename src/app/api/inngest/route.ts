@@ -13,6 +13,9 @@
 // which requires Node TCP sockets).
 
 export const runtime = 'nodejs';
+// The report pipeline (graph + Puppeteer PDF render) runs inside this handler in
+// a single invocation; give it the Vercel Pro ceiling so it isn't killed mid-render.
+export const maxDuration = 300;
 
 import { inngest } from '@/inngest/client';
 import { generateReportFn } from '@/inngest/functions/generateReport';
