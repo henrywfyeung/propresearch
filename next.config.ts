@@ -10,8 +10,15 @@ const nextConfig: NextConfig = {
   // them and the deployed function can't launch Chromium ("libnss3.so: cannot
   // open shared object file"). Force-include them in the function that renders
   // the PDF: the graph's Node 13 runs inside the Inngest handler at /api/inngest.
+  //
+  // Point at the REAL .pnpm path, NOT node_modules/@sparticuz/chromium (a pnpm
+  // symlink) — tracing through the symlink makes Vercel reject the package with
+  // "invalid deployment package … files in symlinked directories". The version
+  // glob keeps it working across @sparticuz/chromium bumps.
   outputFileTracingIncludes: {
-    '/api/inngest': ['./node_modules/@sparticuz/chromium/bin/**'],
+    '/api/inngest': [
+      './node_modules/.pnpm/@sparticuz+chromium@*/node_modules/@sparticuz/chromium/bin/**',
+    ],
   },
   // typedRoutes graduated from `experimental` to a stable top-level option in
   // Next 15.5.
