@@ -3,6 +3,8 @@
 // to the bundled @sparticuz/chromium (Linux). Returns the PDF bytes; the caller
 // streams them or uploads to storage.
 
+import path from 'node:path';
+import { logger } from '@/lib/observability/logger';
 import puppeteer from 'puppeteer-core';
 
 async function launchOptions() {
@@ -11,11 +13,36 @@ async function launchOptions() {
     return { executablePath: chromePath, args: ['--no-sandbox'], headless: true as const };
   }
   const chromium = (await import('@sparticuz/chromium')).default;
-  return {
-    executablePath: await chromium.executablePath(),
-    args: chromium.args,
-    headless: true as const,
-  };
+  const executablePath = await chromium.executablePath();
+
+  // CRITICAL on Vercel: @sparticuz/chromium extracts Chromium and its shared
+  // libraries (libnss3.so, libnspr4.so, …) next to the binary in /tmp, but the
+  // dynamic loader doesn't search that directory by default — so the launch dies
+  // with "libnss3.so: cannot open shared object file". Point LD_LIBRARY_PATH at
+  // the binary's directory before launching. (The libs themselves are shipped in
+  // @sparticuz/chromium/bin and force-included into this function via
+  // next.config.ts outputFileTracingIncludes.)
+  const libDir = path.dirname(executablePath);
+  process.env.LD_LIBRARY_PATH = [libDir, process.env.LD_LIBRARY_PATH].filter(Boolean).join(':');
+
+  // One-time diagnostic so a recurrence is fully explainable from logs (is the
+  // lib present? where?). Cheap; only runs on the serverless launch path.
+  try {
+    const fs = await import('node:fs');
+    logger.info(
+      {
+        executablePath,
+        libDir,
+        libnss3Present: fs.existsSync(path.join(libDir, 'libnss3.so')),
+        libDirSample: fs.existsSync(libDir) ? fs.readdirSync(libDir).slice(0, 40) : null,
+      },
+      'chromium launch: lib resolution',
+    );
+  } catch {
+    /* diagnostic only */
+  }
+
+  return { executablePath, args: chromium.args, headless: true as const };
 }
 
 const FOOTER_TEMPLATE =
