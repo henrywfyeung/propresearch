@@ -153,7 +153,7 @@ Renovate auto-PRs upgrades behind CI. `[R9]`
 | p-limit | 6.1.0 |
 | drizzle-orm | 0.36.4 |
 | postgres | 3.4.5 |
-| inngest | 3.27.4 |
+| inngest | 3.54.2 |
 | @supabase/supabase-js | 2.45.6 |
 | @supabase/ssr | 0.5.2 |
 | @sentry/nextjs | 8.40.0 |
