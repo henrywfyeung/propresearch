@@ -5,11 +5,9 @@ const nextConfig: NextConfig = {
   // Puppeteer + @sparticuz/chromium can't be bundled — leave them external.
   // See CLAUDE.md §13.3, §16.2 / [R28] for the render-route memory pin.
   serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
-  // Tighten the build artefact for Vercel; the report state JSONB is large
-  // but lives in Postgres, not in the bundle.
-  experimental: {
-    typedRoutes: true,
-  },
+  // typedRoutes graduated from `experimental` to a stable top-level option in
+  // Next 15.5.
+  typedRoutes: true,
   // Allowlist Domain photo CDN + Street View + R2 for any future <Image> usage.
   images: {
     remotePatterns: [
