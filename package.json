@@ -40,7 +40,7 @@
     "@radix-ui/react-toast": "1.2.2",
     "@react-email/components": "0.0.28",
     "@sentry/nextjs": "8.40.0",
-    "@sparticuz/chromium": "131.0.0",
+    "@sparticuz/chromium-min": "131.0.0",
     "@supabase/ssr": "0.5.2",
     "@supabase/supabase-js": "2.45.6",
     "@turf/boolean-point-in-polygon": "7.1.0",
