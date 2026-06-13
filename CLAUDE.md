@@ -137,7 +137,7 @@ Renovate auto-PRs upgrades behind CI. `[R9]`
 
 | Package | Version |
 |---|---|
-| next | 15.0.3 |
+| next | 15.5.19 |
 | react / react-dom | 19.0.0 |
 | @langchain/langgraph | 0.2.34 |
 | @langchain/core | 0.3.18 |
@@ -1181,7 +1181,7 @@ Tighten over time once stable.
 ### 10.3 Route protection — Edge session gate + Node allow-list gate `[R5]`
 
 > **Implementation reality (deviation from the original single-middleware
-> design).** Next.js 15.0.3 middleware runs on the **Edge runtime**, which
+> design).** Next.js 15.5.19 middleware runs on the **Edge runtime**, which
 > can't use `postgres-js` (needs Node TCP sockets). The allow-list lives in
 > Postgres and we query it via Drizzle, so the DB re-check **cannot** run in
 > middleware. We also don't use Supabase's Data API/PostgREST (§4.3), so
