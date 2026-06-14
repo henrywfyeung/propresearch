@@ -59,6 +59,19 @@ Apps → Sync new app → Connect Vercel). Skip the CLI-only vars
 (`REASON_*`, `VISION_COMPS_TOPK`) — their defaults already match production.
 Optional: `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL_FALLBACK` for LLM fallback.
 
+> **⚠️ Required for PDF rendering — do not omit:**
+> ```
+> AWS_LAMBDA_JS_RUNTIME=nodejs20.x
+> ```
+> The render uses `@sparticuz/chromium-min` (`src/report/pdf.ts`), which **only
+> extracts Chromium's shared libraries** (`libnss3.so`, `libnspr4.so`, …) when
+> this var's value contains the substring **`20.x`** — it gates the AL2023 lib
+> inflation + the `LD_LIBRARY_PATH` setup. Without it (or with e.g. `nodejs22.x`,
+> which does *not* contain `20.x`), every report fails at render with
+> `libnss3.so: cannot open shared object file`. `nodejs20.x` is correct
+> regardless of the function's actual Node version — it only selects the AL2023
+> lib set. (Optional: `CHROMIUM_PACK_URL` overrides the Chromium pack source.)
+
 ### 5. Set the plan to Pro
 
 Required for the **300 s function timeout** the report render + LangGraph pipeline
