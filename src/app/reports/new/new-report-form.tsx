@@ -96,13 +96,16 @@ export function NewReportForm() {
         setError(
           typeof data.error === 'string' ? data.error : 'Something went wrong. Please try again.',
         );
+        setSubmitting(false);
         return;
       }
       const { id } = (await res.json()) as { id: string };
+      // Keep the button in its submitting state through the navigation — clearing
+      // it here makes it flicker back to "Generate" for the ~1s before the route
+      // changes. The component unmounts on navigation, so no need to reset.
       router.push(`/reports/${id}` as Route);
     } catch {
       setError('Network error. Please check your connection and try again.');
-    } finally {
       setSubmitting(false);
     }
   }
