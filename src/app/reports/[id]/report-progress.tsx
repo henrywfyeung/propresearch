@@ -48,13 +48,16 @@ function ProgressBar({ pct }: { pct: number }) {
   );
 }
 
-function Stepper({ currentNode }: { currentNode: string | null }) {
-  const active = activeStepIndex(currentNode);
+function Stepper({ seen, currentNode }: { seen: Set<string>; currentNode: string | null }) {
   return (
     <ol className="space-y-2">
-      {NODE_ORDER.map((node, i) => {
-        const isDone = active > i;
-        const isCurrent = active === i;
+      {NODE_ORDER.map((node) => {
+        // Monotonic: a step is "done" once its node has appeared as currentNode in
+        // any poll. The graph runs the fan-out nodes in parallel, so completion
+        // order isn't list order — but ticks only ever accumulate, never bounce
+        // back (which is what made the old index-based stepper jump around).
+        const isDone = seen.has(node);
+        const isCurrent = node === currentNode; // most-recently-completed node (the frontier)
         return (
           <li
             key={node}
@@ -62,17 +65,18 @@ function Stepper({ currentNode }: { currentNode: string | null }) {
               isCurrent ? 'text-ink font-medium' : isDone ? 'text-ink-muted' : 'text-ink-muted/50'
             }`}
           >
-            {/* Step indicator */}
+            {/* Step indicator: ✓ once seen, filled accent on the frontier, else a
+                neutral dot (no numbers — completion isn't sequential here). */}
             <span
               className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
-                isDone
-                  ? 'bg-accent/15 text-accent'
-                  : isCurrent
-                    ? 'bg-accent text-white'
+                isCurrent
+                  ? 'bg-accent text-white'
+                  : isDone
+                    ? 'bg-accent/15 text-accent'
                     : 'bg-black/[0.06] text-ink-muted/40'
               }`}
             >
-              {isDone ? '✓' : i + 1}
+              {isDone ? '✓' : ''}
             </span>
             {NODE_LABELS[node]}
           </li>
@@ -88,6 +92,10 @@ function Stepper({ currentNode }: { currentNode: string | null }) {
 
 export function ReportProgress({ id }: { id: string }) {
   const [data, setData] = useState<StatusResponse | null>(null);
+  // Accumulated set of nodes seen as `currentNode` across polls — drives the
+  // monotonic stepper so ticks never bounce back (parallel fan-out completes out
+  // of list order).
+  const [seen, setSeen] = useState<Set<string>>(() => new Set());
   const [fetchError, setFetchError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -110,6 +118,8 @@ export function ReportProgress({ id }: { id: string }) {
         }
         const json = (await res.json()) as StatusResponse;
         setData(json);
+        const cn = json.currentNode;
+        if (cn) setSeen((s) => (s.has(cn) ? s : new Set(s).add(cn)));
         if (json.status !== 'queued' && json.status !== 'running') {
           stop();
         }
@@ -192,17 +202,21 @@ export function ReportProgress({ id }: { id: string }) {
 
   // ---- Queued / Running ----
   const isQueued = d.status === 'queued';
+  // Monotonic progress: fraction of distinct nodes completed (matches the ticks).
+  // Derived from `seen` rather than the API's index-based percentage, which bounces
+  // as parallel fan-out nodes finish out of order.
+  const pct = isQueued ? 0 : Math.round((seen.size / NODE_ORDER.length) * 100);
   return (
     <div className="rounded-lg border border-black/5 bg-bg-card p-8 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-sm font-medium text-ink">
           {isQueued ? 'Queued — starting soon…' : labelForNode(d.currentNode)}
         </span>
-        <span className="font-mono text-xs text-ink-muted">{d.percentage}%</span>
+        <span className="font-mono text-xs text-ink-muted">{pct}%</span>
       </div>
-      <ProgressBar pct={d.percentage} />
+      <ProgressBar pct={pct} />
       <div className="mt-6">
-        <Stepper currentNode={isQueued ? null : d.currentNode} />
+        <Stepper seen={seen} currentNode={isQueued ? null : d.currentNode} />
       </div>
       <p className="mt-6 text-xs text-ink-muted">
         This usually takes 3–5 minutes. You can leave this page and come back — the report will
