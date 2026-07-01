@@ -43,10 +43,18 @@ vi.mock('@/inngest/client', () => ({
 vi.mock('@/db/client', () => ({ db: {} }));
 vi.mock('@/db/client-worker', () => ({ workerDb: {} }));
 
+// ── Mock @/db/rate-limit ────────────────────────────────────────────────────
+
+vi.mock('@/db/rate-limit', () => ({
+  DAILY_REPORT_LIMIT: 20,
+  bumpDailyReportCount: vi.fn(),
+}));
+
 // ── Imports (after mocks) ───────────────────────────────────────────────────
 
 import { GET } from '@/app/api/reports/[id]/route';
 import { POST } from '@/app/api/reports/route';
+import { bumpDailyReportCount } from '@/db/rate-limit';
 import { createReport, getReportStatus, markFailed } from '@/db/reports';
 import { inngest } from '@/inngest/client';
 import { NODE_ORDER } from '@/lib/reportNodes';
@@ -55,6 +63,7 @@ const mockCreateReport = vi.mocked(createReport);
 const mockGetReportStatus = vi.mocked(getReportStatus);
 const mockMarkFailed = vi.mocked(markFailed);
 const mockSend = vi.mocked(inngest.send);
+const mockBump = vi.mocked(bumpDailyReportCount);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +98,7 @@ describe('POST /api/reports', () => {
     mockCreateReport.mockReset().mockResolvedValue('rid-1');
     mockSend.mockReset().mockResolvedValue(undefined as never);
     mockMarkFailed.mockReset().mockResolvedValue(undefined as never);
+    mockBump.mockReset().mockResolvedValue(1); // under the limit by default
   });
 
   it('returns 201 { id } on a valid body', async () => {
@@ -96,6 +106,15 @@ describe('POST /api/reports', () => {
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json).toEqual({ id: 'rid-1' });
+  });
+
+  it('returns 429 without creating/enqueuing when the daily limit is exceeded', async () => {
+    mockBump.mockResolvedValueOnce(21); // over the limit of 20
+    const res = await POST(makePostRequest(VALID_BODY));
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining('Daily limit') });
+    expect(mockCreateReport).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('calls createReport with the userId from requireAllowedUser', async () => {

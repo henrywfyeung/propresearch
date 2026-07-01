@@ -199,7 +199,9 @@ export const llmCalls = pgTable(
 );
 
 // --------------------------------------------------------------------------
-// rate_limit_counters — per-user per-day counter, incremented only on success [R6].
+// rate_limit_counters — per-user per-day counter. Incremented on REQUEST (each
+// trigger spends LLM budget on the shared key, so the cap must bound triggers;
+// see src/db/rate-limit.ts) — this supersedes the original [R6] on-success plan.
 // --------------------------------------------------------------------------
 
 export const rateLimitCounters = pgTable(
