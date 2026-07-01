@@ -72,6 +72,15 @@ Optional: `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL_FALLBACK` for LLM fallback.
 > regardless of the function's actual Node version — it only selects the AL2023
 > lib set. (Optional: `CHROMIUM_PACK_URL` overrides the Chromium pack source.)
 
+**Optional — error tracking + limits:**
+- `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` — enable Sentry error reporting (server +
+  browser). Dormant/no-op until set; PII (addresses, listing/report state) is
+  scrubbed via `beforeSend`. For source-map upload also set `SENTRY_ORG` /
+  `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` (otherwise upload is skipped — a warning,
+  not an error). Get the DSN from Sentry → Project → Settings → Client Keys (DSN).
+- `DAILY_REPORT_LIMIT` — per-user reports/day cap (default **20**); enforced in
+  `POST /api/reports`, returns 429 when exceeded.
+
 ### 5. Set the plan to Pro
 
 Required for the **300 s function timeout** the report render + LangGraph pipeline

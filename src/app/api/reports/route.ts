@@ -3,12 +3,14 @@
 // Triggers a new report generation:
 //   1. Auth gate (requireAllowedUser)
 //   2. Zod-validate the request body
-//   3. createReport → insert queued row
-//   4. inngest.send → enqueue the generation function
-//   5. Return 201 { id }
+//   3. Per-user daily rate limit (§11.1) — protects LLM spend on the shared key
+//   4. createReport → insert queued row
+//   5. inngest.send → enqueue the generation function
+//   6. Return 201 { id }
 
 export const runtime = 'nodejs';
 
+import { DAILY_REPORT_LIMIT, bumpDailyReportCount } from '@/db/rate-limit';
 import { createReport, markFailed } from '@/db/reports';
 import { inngest } from '@/inngest/client';
 import { requireAllowedUser } from '@/lib/auth/user';
@@ -37,6 +39,19 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const { rawAddress, subject } = parsed.data;
+
+  // Per-user daily cap — each report spends ~$0.55 of LLM budget on the shared
+  // key, so bound triggers (§11.1). Atomic increment-and-check.
+  const dailyCount = await bumpDailyReportCount(userId);
+  if (dailyCount > DAILY_REPORT_LIMIT) {
+    logger.warn({ userId, dailyCount }, 'daily report limit reached');
+    return Response.json(
+      {
+        error: `Daily limit of ${DAILY_REPORT_LIMIT} reports reached. Please try again tomorrow.`,
+      },
+      { status: 429 },
+    );
+  }
 
   const reportId = await createReport(userId);
 
