@@ -20,7 +20,7 @@ vi.mock('@/agents/nodes/05_planningAndNews', () => ({
 vi.mock('@/report/pdf', () => ({
   renderReportPdf: vi.fn().mockResolvedValue(new Uint8Array([1])),
 }));
-vi.mock('@/tools/storage/s3', () => ({
+vi.mock('@/tools/storage/gcs', () => ({
   uploadPdf: vi.fn().mockResolvedValue('reports/r-test/v1.pdf'),
 }));
 

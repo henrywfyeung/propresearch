@@ -34,11 +34,11 @@ vi.mock('@/agents/nodes/04b_visionAnalyseComps', () => ({
   visionAnalyseComps: vi.fn().mockResolvedValue({}),
 }));
 
-import { uploadPdf } from '@/tools/storage/s3';
+import { uploadPdf } from '@/tools/storage/gcs';
 vi.mock('@/report/pdf', () => ({
   renderReportPdf: vi.fn().mockResolvedValue(new Uint8Array([1])),
 }));
-vi.mock('@/tools/storage/s3', () => ({
+vi.mock('@/tools/storage/gcs', () => ({
   uploadPdf: vi.fn().mockResolvedValue('reports/r1/v1.pdf'),
 }));
 vi.mock('@/tools/mapbox/staticMap', () => ({

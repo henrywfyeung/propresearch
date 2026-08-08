@@ -50,10 +50,7 @@ export async function markFailed(id: string, errorMessage: string): Promise<void
 }
 
 export async function markNode(id: string, currentNode: string): Promise<void> {
-  await db
-    .update(reports)
-    .set({ currentNode, updatedAt: new Date() })
-    .where(eq(reports.id, id));
+  await db.update(reports).set({ currentNode, updatedAt: new Date() }).where(eq(reports.id, id));
 }
 
 // ---------------------------------------------------------------------------

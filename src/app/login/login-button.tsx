@@ -1,40 +1,16 @@
-'use client';
-
-import { createSupabaseBrowserClient } from '@/lib/auth/browser';
-import { useState } from 'react';
+// Server-side handshake: this is a plain link to /auth/login, which builds the
+// Google consent URL and sets the state/nonce cookies. No client SDK and no
+// NEXT_PUBLIC_* client id ends up in the browser bundle.
 
 export function GoogleSignInButton() {
-  const [loading, setLoading] = useState(false);
-
-  async function signIn() {
-    setLoading(true);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        // Land back on our callback route, which does the allow-list gate
-        // and then redirects to the dashboard (§10.2).
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    });
-    if (error) {
-      setLoading(false);
-      window.location.href = '/login?error=oauth';
-    }
-    // On success the browser is redirected to Google; no further work here.
-  }
-
   return (
-    <button
-      type="button"
-      onClick={signIn}
-      disabled={loading}
-      className="flex w-full items-center justify-center gap-3 rounded-md border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:bg-black/[0.02] disabled:opacity-60"
+    <a
+      href="/auth/login"
+      className="flex w-full items-center justify-center gap-3 rounded-md border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:bg-black/[0.02]"
     >
       <GoogleMark />
-      {loading ? 'Redirecting…' : 'Sign in with Google'}
-    </button>
+      Sign in with Google
+    </a>
   );
 }
 

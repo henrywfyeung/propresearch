@@ -1,4 +1,5 @@
 // tests/unit/pdf-route.test.ts
+import { Readable } from 'node:stream';
 import { GET } from '@/app/reports/[id]/pdf/route';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,8 +15,8 @@ vi.mock('@/db/reports', () => ({
   getReportStatus: vi.fn(),
 }));
 
-vi.mock('@/tools/storage/s3', () => ({
-  getPdf: vi.fn(),
+vi.mock('@/tools/storage/gcs', () => ({
+  getPdfStream: vi.fn(),
 }));
 
 // We also need to mock next/navigation (redirect used inside requireAllowedUser
@@ -28,7 +29,7 @@ vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
 import { getReportStatus } from '@/db/reports';
 import { requireAllowedUser } from '@/lib/auth/user';
-import { getPdf } from '@/tools/storage/s3';
+import { getPdfStream } from '@/tools/storage/gcs';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,7 +51,10 @@ beforeEach(() => {
     errorMessage: null,
     subjectAddress: '1 Test St',
   });
-  vi.mocked(getPdf).mockResolvedValue(PDF_BYTES);
+  vi.mocked(getPdfStream).mockResolvedValue({
+    stream: Readable.from(Buffer.from(PDF_BYTES)),
+    size: PDF_BYTES.byteLength,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -72,18 +76,18 @@ describe('GET /reports/[id]/pdf', () => {
     expect(body).toEqual(PDF_BYTES);
   });
 
-  it('calls getPdf with the report pdfUrl key', async () => {
+  it('calls getPdfStream with the report pdfUrl key', async () => {
     await GET(new Request('http://localhost'), makeParams('report-abc'));
-    expect(getPdf).toHaveBeenCalledWith('reports/report-abc/v1.pdf');
+    expect(getPdfStream).toHaveBeenCalledWith('reports/report-abc/v1.pdf');
   });
 
-  it('returns 404 and does NOT call getPdf when getReportStatus returns null', async () => {
+  it('returns 404 and does NOT call getPdfStream when getReportStatus returns null', async () => {
     vi.mocked(getReportStatus).mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost'), makeParams('missing'));
 
     expect(res.status).toBe(404);
-    expect(getPdf).not.toHaveBeenCalled();
+    expect(getPdfStream).not.toHaveBeenCalled();
   });
 
   it('returns 404 when report exists but pdfUrl is null (PDF not ready)', async () => {
@@ -98,7 +102,7 @@ describe('GET /reports/[id]/pdf', () => {
     const res = await GET(new Request('http://localhost'), makeParams('report-abc'));
 
     expect(res.status).toBe(404);
-    expect(getPdf).not.toHaveBeenCalled();
+    expect(getPdfStream).not.toHaveBeenCalled();
   });
 
   it('passes the awaited id to getReportStatus', async () => {
@@ -108,23 +112,17 @@ describe('GET /reports/[id]/pdf', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests — getPdf unit (mirrors the S3 mock pattern from storage-s3.test.ts)
+// Tests — the route's contract with the storage layer
 // ---------------------------------------------------------------------------
 
-// Re-test getPdf directly, using a separate mock of @aws-sdk/client-s3.
-// (The s3 module mock above covers the route tests; here we test the function
-// itself by resetting to a real-ish implementation via a dedicated describe.)
-
-describe('getPdf (unit)', () => {
-  // We need to test the real getPdf implementation here, not the mock.
-  // Import the REAL implementation by un-mocking in this describe block.
-  it('returns bytes from Body.transformToByteArray', async () => {
-    // Because the whole module is mocked above, we test the real function
-    // by verifying the mock was set up correctly and the route calls it
-    // with the right key. The actual AWS plumbing is covered by the s3-module
-    // unit test (storage-s3.test.ts pattern). Here we verify the contract:
-    // getPdf is called with the S3 key from pdfUrl.
-    vi.mocked(getPdf).mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
+describe('storage contract', () => {
+  it('streams whatever bytes getPdfStream yields', async () => {
+    // The storage module itself is covered by storage-gcs.test.ts. Here we
+    // only verify the route forwards the stream through unmodified.
+    vi.mocked(getPdfStream).mockResolvedValueOnce({
+      stream: Readable.from(Buffer.from(new Uint8Array([1, 2, 3]))),
+      size: 3,
+    });
 
     const res = await GET(new Request('http://localhost'), makeParams('report-abc'));
     const body = new Uint8Array(await res.arrayBuffer());

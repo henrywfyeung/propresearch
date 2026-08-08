@@ -42,7 +42,6 @@ vi.mock('@/inngest/client', () => ({
 
 vi.mock('@/db/client', () => ({ db: {} }));
 
-
 // ── Mock @/db/rate-limit ────────────────────────────────────────────────────
 
 vi.mock('@/db/rate-limit', () => ({

@@ -10,7 +10,7 @@ import { renderReportPdf } from '@/report/pdf';
 import { renderReportHtml } from '@/report/render';
 import { toReportData } from '@/report/toReportData';
 import { staticMapDataUrl } from '@/tools/mapbox/staticMap';
-import { uploadPdf } from '@/tools/storage/s3';
+import { uploadPdf } from '@/tools/storage/gcs';
 import { streetviewUrl } from '@/tools/streetview/url';
 
 export async function render(state: GraphState): Promise<Partial<GraphState>> {

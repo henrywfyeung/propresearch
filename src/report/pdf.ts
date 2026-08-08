@@ -1,66 +1,39 @@
 // src/report/pdf.ts — HTML -> A4 PDF via Puppeteer (CLAUDE.md §13.3).
-// Dev: set CHROME_PATH to a local Chrome/Chromium.
-// Serverless (Vercel): @sparticuz/chromium-min ships NO binary — it downloads +
-// extracts a Chromium "pack" to /tmp at runtime, which sidesteps the bundling /
-// file-tracing / pnpm-symlink problems of the full package on Vercel.
+//
+// Chromium is installed in the container image and located by CHROME_PATH.
+// Locally, point CHROME_PATH at any Chrome/Chromium binary.
+//
+// This used to be 86 lines of Lambda scar tissue: @sparticuz/chromium-min ships
+// no binary, so it downloaded a ~50MB pack from GitHub releases to /tmp on every
+// cold start, then needed LD_LIBRARY_PATH patched by hand or Chromium died with
+// "libnss3.so: cannot open shared object file" — and only performed that setup
+// at all when AWS_LAMBDA_JS_RUNTIME contained the substring "20.x". Four
+// production firefights (4a70ba1, 24383b3, 80ec2a5, 2a5c267) lived in here.
+// Running our own container image deletes the entire category of problem.
 
-import path from 'node:path';
-import { logger } from '@/lib/observability/logger';
 import puppeteer from 'puppeteer-core';
 
-// Default to the official v131 release pack (matches puppeteer-core 23.8.0).
-// Override with CHROMIUM_PACK_URL to mirror it (e.g. on our own S3) if the
-// GitHub release ever rate-limits or is slow.
-const PACK_URL =
-  process.env.CHROMIUM_PACK_URL ??
-  'https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar';
-
-// Cache the extracted binary path across warm invocations (the pack download +
-// extraction only needs to happen on a cold start).
-let cachedExecPath: string | undefined;
-
 async function launchBrowser() {
-  const chromePath = process.env.CHROME_PATH;
-  if (chromePath) {
-    return puppeteer.launch({
-      executablePath: chromePath,
-      args: ['--no-sandbox'],
-      headless: true,
-    });
+  const executablePath = process.env.CHROME_PATH;
+  if (!executablePath) {
+    throw new Error(
+      'CHROME_PATH is not set. The worker image installs Chromium at ' +
+        '/usr/bin/chromium; locally, point CHROME_PATH at a Chrome binary.',
+    );
   }
 
-  const chromium = (await import('@sparticuz/chromium-min')).default;
-  if (!cachedExecPath) {
-    cachedExecPath = await chromium.executablePath(PACK_URL);
-  }
-  const executablePath = cachedExecPath;
-
-  // The dynamic loader doesn't search the extraction dir by default, so Chromium
-  // dies with "libnss3.so / libnspr4.so: cannot open shared object file". Point
-  // LD_LIBRARY_PATH at the binary's dir (where the .so libs are extracted).
-  const libDir = path.dirname(executablePath);
-  process.env.LD_LIBRARY_PATH = [libDir, process.env.LD_LIBRARY_PATH].filter(Boolean).join(':');
-
-  try {
-    return await puppeteer.launch({ executablePath, args: chromium.args, headless: true });
-  } catch (err) {
-    // On failure, dump the actual lib dir so a "cannot open shared object"
-    // recurrence is fully diagnosable from logs (which lib is missing vs present).
-    try {
-      const fs = await import('node:fs');
-      logger.error(
-        {
-          err: String(err),
-          libDir,
-          files: fs.existsSync(libDir) ? fs.readdirSync(libDir) : 'MISSING',
-        },
-        'chromium launch failed: lib dir contents',
-      );
-    } catch {
-      /* diagnostic only */
-    }
-    throw err;
-  }
+  return puppeteer.launch({
+    executablePath,
+    headless: true,
+    args: [
+      // No user namespaces inside the container sandbox.
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      // Cloud Run gives a small /dev/shm; without this Chromium crashes part
+      // way through rendering a long report.
+      '--disable-dev-shm-usage',
+    ],
+  });
 }
 
 const FOOTER_TEMPLATE =

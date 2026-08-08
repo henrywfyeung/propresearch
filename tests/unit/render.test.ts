@@ -1,13 +1,13 @@
 import { render } from '@/agents/nodes/13_render';
 import { fetchImagesAsDataUrls } from '@/report/fetchImages';
 import { renderReportPdf } from '@/report/pdf';
-import { uploadPdf } from '@/tools/storage/s3';
+import { uploadPdf } from '@/tools/storage/gcs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // tests/unit/render.test.ts
 import { graphState, sampleComparable } from '../fixtures/comps';
 
 vi.mock('@/report/pdf', () => ({ renderReportPdf: vi.fn() }));
-vi.mock('@/tools/storage/s3', () => ({ uploadPdf: vi.fn() }));
+vi.mock('@/tools/storage/gcs', () => ({ uploadPdf: vi.fn() }));
 vi.mock('@/report/fetchImages', () => ({ fetchImagesAsDataUrls: vi.fn() }));
 const mockPdf = vi.mocked(renderReportPdf);
 const mockUpload = vi.mocked(uploadPdf);
