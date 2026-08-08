@@ -80,7 +80,7 @@ Every app onboarded to the platform gets, by convention:
 | Storage | bucket `<app>-<purpose>`, uniform access, public-access-prevention on |
 | Secrets | `<app>-<name>` in Secret Manager; accessor bound **per-SA**, never per-project |
 | Images | one **shared** Artifact Registry repo `apps`, images `apps/<app>-<service>:<sha>` |
-| CI | shared WIF pool; one `apps-provider` with an explicit repo allow-list condition (`assertion.repository in ["henrywfyeung/propsearch", …]`) — extended by one line per new app. fungi's existing single-repo provider is left untouched. |
+| CI | shared WIF pool; one `apps-provider` with an explicit repo allow-list condition (`assertion.repository in ["henrywfyeung/propresearch", …]`) — extended by one line per new app. fungi's existing single-repo provider is left untouched. |
 | Observability | module-emitted 5xx + latency alert policies on the existing email channel |
 
 A shared `apps` registry rather than per-app repos gives one cleanup policy and one quota story

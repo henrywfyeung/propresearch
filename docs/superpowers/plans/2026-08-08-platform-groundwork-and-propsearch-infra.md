@@ -21,7 +21,7 @@
 | 3 Harden Cloud SQL | done — `max_connections=60`, autoresize cap 20, API deletion protection, alert at 42 |
 | 4 Budget | done — HKD 480 at 50/90/100% |
 | 5 `apps` registry | done — with keep-last-3 + delete-untagged |
-| 6 `apps-provider` WIF | done — `assertion.repository in ["henrywfyeung/propsearch"]` |
+| 6 `apps-provider` WIF | done — `assertion.repository in ["henrywfyeung/propresearch"]` |
 | 7 `modules/app` | done |
 | 8 Onboard propsearch | done — 58 resources; both services Ready, HTTP 200 |
 | 9 OAuth client + secrets | **secrets done** (5 real/generated, 4 placeholders). **OAuth client still needs manual Console creation — user action.** |
@@ -776,7 +776,7 @@ Append to `/Users/henry/Desktop/fungi/infra/variables.tf`:
 variable "app_github_repos" {
   description = "GitHub owner/repo allow-list for the shared apps WIF provider. Add one entry per onboarded app."
   type        = list(string)
-  default     = ["henrywfyeung/propsearch"]
+  default     = ["henrywfyeung/propresearch"]
 }
 ```
 
@@ -836,7 +836,7 @@ gcloud iam workload-identity-pools providers describe apps-provider \
   --project fungi-family --format="value(attributeCondition)"
 ```
 
-Expected: `assertion.repository in ["henrywfyeung/propsearch"]`
+Expected: `assertion.repository in ["henrywfyeung/propresearch"]`
 
 - [ ] **Step 5: Commit**
 
@@ -1410,7 +1410,7 @@ module "propsearch" {
   project_id          = var.project_id
   region              = var.region
   app_name            = "propsearch"
-  github_repo         = "henrywfyeung/propsearch"
+  github_repo         = "henrywfyeung/propresearch"
   sql_instance_name   = google_sql_database_instance.fungi.name
   sql_connection_name = google_sql_database_instance.fungi.connection_name
   wif_pool_name       = google_iam_workload_identity_pool.github.name
@@ -1504,13 +1504,13 @@ Confirm `RAPIDAPI_REA_HOST` against propsearch's `.env.local` before applying; i
 
 - [ ] **Step 2: Add propsearch to the WIF allow-list if not already present**
 
-`var.app_github_repos` already defaults to `["henrywfyeung/propsearch"]` from Task 6. Verify:
+`var.app_github_repos` already defaults to `["henrywfyeung/propresearch"]` from Task 6. Verify:
 
 ```bash
 grep -A4 'variable "app_github_repos"' /Users/henry/Desktop/fungi/infra/variables.tf
 ```
 
-Expected: the default list contains `henrywfyeung/propsearch`.
+Expected: the default list contains `henrywfyeung/propresearch`.
 
 - [ ] **Step 3: Plan and assert nothing existing is touched**
 

@@ -97,7 +97,7 @@ printf '%s' '<value>' | gcloud secrets versions add <secret-name> --project fung
 ## CI
 
 Keyless via Workload Identity Federation. Set these as GitHub repository secrets in
-`henrywfyeung/propsearch`:
+`henrywfyeung/propresearch`:
 
 - `WIF_PROVIDER` = `projects/505888948678/locations/global/workloadIdentityPools/github-pool/providers/apps-provider`
 - `WIF_SERVICE_ACCOUNT` = `propsearch-ci@fungi-family.iam.gserviceaccount.com`
