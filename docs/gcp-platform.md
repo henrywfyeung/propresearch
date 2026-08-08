@@ -52,11 +52,23 @@ propsearch's budget is **14**: web 3 instances × pool 2, plus worker 4 × pool 
 asserts a per-app ceiling of 20 at plan time. Measured fungi usage is 3 connections, so the
 instance currently has ample headroom.
 
-### Table-ownership trap
+### Two database-privilege traps
 
-Migrations applied by `propsearch-ci` are **owned by that role and invisible to the runtime
-service accounts** until explicitly granted. This is the same trap documented in fungi's
-`docs/GCP_RESOURCES.md` §2. The deploy pipeline must run a grant step, not just `db:migrate`.
+**1. IAM users cannot create tables until bootstrapped.** Cloud SQL IAM principals are members of
+`cloudsqliamuser` only; since PostgreSQL 15 the `public` schema grants CREATE to nobody by
+default, and the database is owned by `cloudsqlsuperuser`. So `pnpm db:migrate` fails with
+`permission denied for schema public` until a **one-time grant made as the `postgres` superuser**.
+Terraform and gcloud cannot do this — SQL privileges are only grantable from inside Postgres.
+
+Run `scripts/bootstrap-db-grants.sql` once per app. fungi needed the same thing:
+`fungi-ci@fungi-family.iam` already has CREATE in the `fungi` database from exactly such a
+bootstrap.
+
+**2. Migrated tables are owned by the migrator.** Tables created by `propsearch-ci` are invisible
+to the runtime service accounts until granted, so the deploy pipeline runs `pnpm db:grant`
+(`scripts/grant-runtime.ts`) after `db:migrate`, not just the migration. `ALTER DEFAULT
+PRIVILEGES` in that script covers future migrations. Same trap as fungi's
+`docs/GCP_RESOURCES.md` §2.
 
 ## Storage
 
@@ -129,6 +141,8 @@ USD; invoices are HKD (~7.8 HKD per USD).
    Terraform loads `*.tf` from the root module only and does not recurse.
 2. Add the repo to `var.app_github_repos` in `infra/variables.tf`.
 3. `terraform apply`, then **populate its secrets** — Cloud Run will not start otherwise.
+3b. Run the one-time `bootstrap-db-grants.sql` equivalent as `postgres`, or the app's very first
+   migration will fail with `permission denied for schema public`.
 4. Budget its connections against the instance's 60 before raising `max_instances`; the module
    fails the plan if the app claims more than 20.
 
