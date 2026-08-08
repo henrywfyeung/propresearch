@@ -1,105 +1,133 @@
-# Deploying to Vercel (CI/CD)
+# Deploying propsearch
 
-CD is codified in [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml):
-**every push to `main`** runs the test gate (lint + typecheck + tests), then
-builds and deploys to **Vercel production** via the Vercel CLI. CI
-([`ci.yml`](../.github/workflows/ci.yml)) runs the same gate on every PR.
+propsearch runs on **Google Cloud Run** in the shared `fungi-family` project
+(`asia-southeast1`). Infrastructure is Terraform in the **fungi** repo
+(`infra/app-propsearch.tf` → `infra/modules/app`); see
+[gcp-platform.md](./gcp-platform.md) for the live resource contract.
 
-> The deploy job stays **dormant** (workflow shows green, deploy skipped) until
-> the three Vercel secrets below exist — so it never fails before setup is done.
+This replaces the previous Vercel deployment. Vercel Pro existed solely to buy
+`maxDuration = 300`; Cloud Run allows 60 minutes, so that constraint is gone
+along with the $20/mo.
+
+## Architecture
+
+Two Cloud Run services, two image targets from one `Dockerfile`:
+
+| Service | Serves | Shape |
+|---|---|---|
+| `propsearch-web` | pages, `/api/reports`, `/auth/*`, `/reports/[id]/pdf` | 1 vCPU / 1 GiB / 60 s / max 3 |
+| `propsearch-worker` | `/api/inngest` only | 2 vCPU / 2 GiB / 900 s / max 4 |
+
+They share the `builder` stage so Next.js compiles once. Only the worker
+installs Chromium — keeping ~500 MB out of the web image is why the services are
+split at all, since the dashboard would otherwise cold-start behind a large pull.
+
+**There is no load balancer.** Inngest is pointed directly at the worker's
+`*.run.app` URL; users hit the web URL. A Cloud Load Balancer would cost roughly
+$18/mo and undo a third of the migration's saving.
 
 ## One-time setup
 
-### 1. Create the Vercel project + read its IDs
+### GitHub repository secrets
+
+In `henrywfyeung/propresearch` → Settings → Secrets → Actions:
+
+| Secret | Value |
+|---|---|
+| `WIF_PROVIDER` | `projects/505888948678/locations/global/workloadIdentityPools/github-pool/providers/apps-provider` |
+| `WIF_SERVICE_ACCOUNT` | `propsearch-ci@fungi-family.iam.gserviceaccount.com` |
+
+No service-account JSON key exists; authentication is keyless via Workload
+Identity Federation.
+
+### Google OAuth client
+
+Console-only — there is no gcloud surface for generic OAuth 2.0 web clients.
+In `fungi-family` → APIs & Services → Credentials → Create Credentials → OAuth
+client ID:
+
+- Type **Web application**, name `propsearch-web`
+- Authorised redirect URIs:
+  - `http://localhost:3000/auth/callback`
+  - `https://propsearch-web-fzsxkxioqa-as.a.run.app/auth/callback`
+
+This must be a **new** client, not fungi's. Keeping the two apps' identity
+surfaces separate is the reason plain OAuth was chosen over Firebase Identity
+Platform, whose user pool is per-GCP-project.
+
+Then load the credentials:
 
 ```bash
-npm i -g vercel
-vercel login                 # browser auth
-vercel link                  # choose "create new project" (or link an existing one)
-cat .vercel/project.json     # → { "orgId": "team_…", "projectId": "prj_…" }
+printf '%s' '<CLIENT_ID>' | gcloud secrets versions add propsearch-google-oauth-client-id --project fungi-family --data-file=-
 ```
 
-(`.vercel/` is git-ignored — don't commit it.) Alternatively, create the project
-in the Vercel dashboard and copy **Project ID** from Project → Settings → General,
-and the **Team/Org ID** from the team's settings.
+### Inngest
 
-### 2. Create a Vercel access token
+Point the Inngest app at the **worker** URL — `https://propsearch-worker-fzsxkxioqa-as.a.run.app/api/inngest` — not the web one. Then load both keys from the Inngest dashboard into `propsearch-inngest-event-key` and `propsearch-inngest-signing-key`.
 
-Vercel → **Account Settings → Tokens → Create Token** (scope it to the account/team
-that owns the project).
+The Inngest↔Vercel integration used to provision these automatically. There is
+no GCP equivalent, so they are manual.
 
-### 3. Add the three GitHub secrets
+## Deploying
+
+Push to `main`. [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) then:
+
+1. Authenticates via WIF.
+2. Builds `web` and `worker` targets, pushes both to
+   `asia-southeast1-docker.pkg.dev/fungi-family/apps/`.
+3. Starts the Cloud SQL Auth Proxy with `--auto-iam-authn`.
+4. Runs `pnpm db:migrate`, then **`pnpm db:grant`**.
+5. Deploys both services.
+6. Smoke-checks that `/login` returns 200.
+
+Terraform owns each service's *shape* and ignores the image tag, so deploys and
+`terraform apply` do not fight each other.
+
+### Why the grant step exists
+
+Cloud SQL tables are owned by whichever role created them. Migrations run as
+`propsearch-ci`, so a newly created table is invisible to `propsearch-web` and
+`propsearch-worker` until granted — the deploy succeeds and then every query
+fails with `permission denied for table`. `scripts/grant-runtime.ts` grants
+existing objects and sets `ALTER DEFAULT PRIVILEGES` so future migrations are
+covered without editing the script. fungi documents the same trap in its
+`docs/GCP_RESOURCES.md` §2.
+
+## Local development
 
 ```bash
-gh secret set VERCEL_TOKEN                      # paste the token at the hidden prompt
-gh secret set VERCEL_ORG_ID --body "team_…"
-gh secret set VERCEL_PROJECT_ID --body "prj_…"
+cp .env.example .env.local   # then fill in the values
+pnpm install
+pnpm dev
 ```
 
-The next push to `main` (or **Actions → Deploy (production) → Run workflow**) will
-now deploy automatically.
+Locally the app uses `DATABASE_URL` (a plain connection string) rather than the
+Cloud SQL socket, so no GCP access is needed to run or test. Set `CHROME_PATH`
+to any Chrome/Chromium binary for PDF rendering.
 
-### 4. Set the runtime env vars in Vercel (once)
+## Rollback
 
-Vercel → Project → **Settings → Environment Variables** (Production scope). Bulk-paste
-these from `.env.local` — the Vercel UI accepts a pasted `.env` block:
+Cloud Run keeps previous revisions:
 
-```
-DATABASE_URL, WORKER_DATABASE_URL,
-NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-OPENAI_API_KEY, OPENAI_MODEL_REASONING, OPENAI_MODEL_COMPOSE, OPENAI_MODEL_VISION,
-RAPIDAPI_KEY, RAPIDAPI_REA_HOST, MAPBOX_TOKEN, GOOGLE_MAPS_KEY,
-S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, S3_REGION
+```bash
+gcloud run services update-traffic propsearch-web --region asia-southeast1 --project fungi-family --to-revisions <REVISION>=100
 ```
 
-**Do not add** `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` — the Inngest Vercel
-integration writes those itself (install it separately: Inngest dashboard →
-Apps → Sync new app → Connect Vercel). Skip the CLI-only vars
-(`BEDS`/`PARKING`/`PHOTOS`/`SAVE_REPORT_PNG`/`CHROME_PATH`) and the tuning knobs
-(`REASON_*`, `VISION_COMPS_TOPK`) — their defaults already match production.
-Optional: `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL_FALLBACK` for LLM fallback.
+List revisions with `gcloud run revisions list --service propsearch-web --region asia-southeast1`.
 
-> **⚠️ Required for PDF rendering — do not omit:**
-> ```
-> AWS_LAMBDA_JS_RUNTIME=nodejs20.x
-> ```
-> The render uses `@sparticuz/chromium-min` (`src/report/pdf.ts`), which **only
-> extracts Chromium's shared libraries** (`libnss3.so`, `libnspr4.so`, …) when
-> this var's value contains the substring **`20.x`** — it gates the AL2023 lib
-> inflation + the `LD_LIBRARY_PATH` setup. Without it (or with e.g. `nodejs22.x`,
-> which does *not* contain `20.x`), every report fails at render with
-> `libnss3.so: cannot open shared object file`. `nodejs20.x` is correct
-> regardless of the function's actual Node version — it only selects the AL2023
-> lib set. (Optional: `CHROMIUM_PACK_URL` overrides the Chromium pack source.)
+Note that a rollback moves *traffic* only — it does not revert a migration, so
+schema changes should stay backward-compatible for at least one release.
 
-**Optional — error tracking + limits:**
-- `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` — enable Sentry error reporting (server +
-  browser). Dormant/no-op until set; PII (addresses, listing/report state) is
-  scrubbed via `beforeSend`. For source-map upload also set `SENTRY_ORG` /
-  `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` (otherwise upload is skipped — a warning,
-  not an error). Get the DSN from Sentry → Project → Settings → Client Keys (DSN).
-- `DAILY_REPORT_LIMIT` — per-user reports/day cap (default **20**); enforced in
-  `POST /api/reports`, returns 429 when exceeded.
+## Environment variables
 
-### 5. Set the plan to Pro
+Production values come from two places, never a `.env` file:
 
-Required for the **300 s function timeout** the report render + LangGraph pipeline
-needs (Hobby caps at 60 s and reports would time out).
+- **Secret Manager** (`propsearch-*`), mounted per service with accessor bound
+  per-service, so the web tier cannot read the worker's LLM keys.
+- **Plain env** declared in `infra/app-propsearch.tf` in the fungi repo.
 
-## After setup — the no-click loop
+`.env.example` documents the full set for local development.
 
-```
-git push main → GitHub Actions: lint + typecheck + tests → vercel build → vercel deploy --prod
-```
-
-Watch it in the repo's **Actions** tab; the production URL is shown on the
-`deploy` job (and recorded under the `production` environment). Manual redeploy:
-**Actions → Deploy (production) → Run workflow**.
-
-## Secrets reference
-
-| Secret | Where from | Used by |
-|---|---|---|
-| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens | `vercel pull/build/deploy` |
-| `VERCEL_ORG_ID` | `.vercel/project.json` (`orgId`) | Vercel CLI project resolution |
-| `VERCEL_PROJECT_ID` | `.vercel/project.json` (`projectId`) | Vercel CLI project resolution |
+There are **no build-time secrets**: auth is a server-side OAuth flow, so no
+`NEXT_PUBLIC_*` client id needs inlining at build time. That removes the
+build-arg juggling the Vercel workflow required.
