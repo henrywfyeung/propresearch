@@ -10,6 +10,39 @@
 
 ---
 
+## ✅ Execution record — 2026-08-08
+
+**Tasks 1–8 are DONE and applied.** Task 9 is partially done. Task 10 remains.
+
+| Task | Status |
+|---|---|
+| 1 Baseline drift | done — `10 to add, 1 to change, 0 to destroy` |
+| 2 Import drift | done — 10 imported, plan reached `No changes` |
+| 3 Harden Cloud SQL | done — `max_connections=60`, autoresize cap 20, API deletion protection, alert at 42 |
+| 4 Budget | done — HKD 480 at 50/90/100% |
+| 5 `apps` registry | done — with keep-last-3 + delete-untagged |
+| 6 `apps-provider` WIF | done — `assertion.repository in ["henrywfyeung/propsearch"]` |
+| 7 `modules/app` | done |
+| 8 Onboard propsearch | done — 58 resources; both services Ready, HTTP 200 |
+| 9 OAuth client + secrets | **secrets done** (5 real/generated, 4 placeholders). **OAuth client still needs manual Console creation — user action.** |
+| 10 Handoff doc | pending |
+
+### Seven ways reality differed from this plan
+
+Recorded because each cost real debugging time and each would bite the next app.
+
+1. **The drift was 10 resources, not 5.** fungi's drift note undercounted; five IAM bindings were also live-only. Task 1's expected list is corrected.
+2. **Terraform does not recurse into subdirectories.** `infra/apps/propsearch.tf` as originally written would have been **silently ignored**. Per-app files must live in the root module as **`infra/app-<name>.tf`**. Task 8 is corrected below.
+3. **Secrets must be populated BEFORE Cloud Run services are created.** Cloud Run refuses to start a revision whose `secret_key_ref` targets `latest` on a versionless secret. The first apply of Task 8 failed on exactly this, so **Task 9 must run before Task 8** (or at least before the services are created).
+4. **The billing account is HKD, not USD.** The Budget API rejects a currency mismatch as a bare `Error 400: invalid argument` naming no field. Published Google list prices are USD; invoices are HKD.
+5. **billingbudgets rejects local user ADC without a forwarded quota project.** Needs `user_project_override` — added as an aliased `google.billing` provider so no other resource's quota attribution changes.
+6. **Two provider-side idempotency traps.** `google_billing_budget.threshold_rules` is an ordered list but the API returns rules grouped by `spend_basis`; and `google_cloud_run_v2_service` has a *service-level* `scaling` block, distinct from `template.scaling`, which the API default-populates. Both produced permanent no-op diffs until declared to match.
+7. **`google_iam_workload_identity_pool_provider.display_name` caps at 32 characters.** The first attempt was 35 and failed.
+
+Also: the real `RAPIDAPI_REA_HOST` is **`realty-base-au.p.rapidapi.com`**, not the `realty-in-au...` guessed in Task 8 — which is why that step said to verify it.
+
+---
+
 ## ⚠️ Two-repo warning
 
 This plan edits **two repositories**:
