@@ -10,7 +10,7 @@
 // if both fail → LlmProvidersUnavailableError (retryable, [R34]).
 
 import { getReportCtx } from '@/agents/reportContext';
-import { workerDb } from '@/db/client-worker';
+import { db } from '@/db/client';
 import { llmCalls } from '@/db/schema';
 import { LlmProvidersUnavailableError } from '@/lib/errors';
 import { logger } from '@/lib/observability/logger';
@@ -236,7 +236,7 @@ async function recordCall(
 
   // Synchronous ledger write BEFORE updating the in-memory counter — this row
   // is what rehydrateCostUsd reads after an Inngest step retry ([R24]).
-  await workerDb.insert(llmCalls).values({
+  await db.insert(llmCalls).values({
     reportId: ctx?.reportId ?? null,
     node: opts.node,
     provider,
@@ -307,7 +307,7 @@ export async function callWithFallback<T>(opts: StructuredCallOpts<T>): Promise<
  * every Inngest step entry so the cost ceiling survives step retries.
  */
 export async function rehydrateCostUsd(reportId: string): Promise<number> {
-  const rows = await workerDb
+  const rows = await db
     .select({ total: sql<string>`coalesce(sum(${llmCalls.costUsd}), 0)` })
     .from(llmCalls)
     .where(sql`${llmCalls.reportId} = ${reportId}`);

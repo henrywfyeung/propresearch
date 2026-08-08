@@ -2,8 +2,8 @@
 // Stubs reportGraph.stream/invoke so the test doesn't need HTTP mocks or real
 // DB connections.  The same module-level vi.mock calls that graph.test.ts uses
 // are needed here because importing @/agents/graph transitively loads the node
-// implementations → @/tools/llm/structuredCall → @/db/client-worker (which
-// throws at load time without WORKER_DATABASE_URL).
+// implementations → @/tools/llm/structuredCall → @/db/client (which
+// throws at load time without DATABASE_URL).
 
 import type { GraphState } from '@/agents/annotation';
 import * as graphModule from '@/agents/graph';

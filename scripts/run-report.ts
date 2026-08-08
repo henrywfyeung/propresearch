@@ -2,7 +2,7 @@
 // print the value range + rendered prose. Needs (in .env.local): MAPBOX_TOKEN,
 // RAPIDAPI_KEY, OPENAI_API_KEY, OPENAI_MODEL_REASONING, OPENAI_MODEL_COMPOSE
 // (+ ANTHROPIC_API_KEY/ANTHROPIC_MODEL_FALLBACK for the fallback path), and a
-// reachable Postgres (DATABASE_URL/WORKER_DATABASE_URL) for the llm_calls ledger.
+// reachable Postgres (DATABASE_URL) for the llm_calls ledger.
 //
 // Usage: pnpm tsx scripts/run-report.ts "12 Awaba Street, Mosman NSW 2088"
 // Edit `SAMPLE_SUBJECT` below to match the property you're researching.

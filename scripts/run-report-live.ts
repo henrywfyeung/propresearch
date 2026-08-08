@@ -180,7 +180,7 @@ async function main() {
   }
 }
 
-// process.exit so the open workerDb pool (and any Puppeteer handle) doesn't keep
+// process.exit so the open db pool (and any Puppeteer handle) doesn't keep
 // the event loop alive after the run finishes.
 main()
   .then(() => process.exit(0))

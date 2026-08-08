@@ -48,10 +48,11 @@ const {
     selectQuery,
   };
 });
-vi.mock('@/db/client-worker', () => ({ workerDb: { insert, update } }));
-// @/db/client is imported by getReportStatus and listReportsForUser; mock it
-// so the module-level DATABASE_URL guard doesn't throw in the test environment.
-vi.mock('@/db/client', () => ({ db: { select: selectQuery, update: vi.fn() } }));
+// One client now serves both the mutation helpers (insert/update) and the read
+// helpers getReportStatus/listReportsForUser (select). Before the Cloud SQL
+// migration these were two modules with two mocks; a single mock must expose
+// every method or the later definition silently wins.
+vi.mock('@/db/client', () => ({ db: { insert, update, select: selectQuery } }));
 
 beforeEach(() => {
   insertReturning.mockReset().mockResolvedValue([{ id: 'rid-1' }]);

@@ -36,12 +36,12 @@ vi.mock('@/inngest/client', () => ({
   inngest: { send: vi.fn().mockResolvedValue(undefined) },
 }));
 
-// ── Mock @/db/client and @/db/client-worker (pulled in transitively) ────────
+// ── Mock @/db/client and @/db/client (pulled in transitively) ────────
 // The route and helper modules import these at module level; without a mock
 // they would try to connect to Postgres.
 
 vi.mock('@/db/client', () => ({ db: {} }));
-vi.mock('@/db/client-worker', () => ({ workerDb: {} }));
+
 
 // ── Mock @/db/rate-limit ────────────────────────────────────────────────────
 

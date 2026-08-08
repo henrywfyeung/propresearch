@@ -9,12 +9,12 @@ import process from 'node:process';
 process.loadEnvFile('.env.local');
 
 async function main() {
-  const { workerDb } = await import('@/db/client-worker');
+  const { db } = await import('@/db/client');
   const { llmCalls } = await import('@/db/schema');
   const { desc } = await import('drizzle-orm');
 
   const limit = Number(process.argv[2] ?? 15);
-  const rows = await workerDb.select().from(llmCalls).orderBy(desc(llmCalls.id)).limit(limit);
+  const rows = await db.select().from(llmCalls).orderBy(desc(llmCalls.id)).limit(limit);
 
   let total = 0;
   for (const r of rows.slice().reverse()) {
@@ -27,7 +27,7 @@ async function main() {
   console.log(`\n${rows.length} rows; cost sum $${total.toFixed(4)}`);
 }
 
-// process.exit so the open workerDb pool doesn't keep the event loop alive.
+// process.exit so the open db pool doesn't keep the event loop alive.
 main()
   .then(() => process.exit(0))
   .catch((e) => {

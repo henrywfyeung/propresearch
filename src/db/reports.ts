@@ -1,17 +1,15 @@
-// src/db/reports.ts — report row lifecycle (CLAUDE.md §4.2). Runs in the worker
-// context (alongside the graph + llm_calls writes), so it uses the session-mode
-// workerDb pool.
+// src/db/reports.ts — report row lifecycle (CLAUDE.md §4.2).
 //
-// getReportStatus uses the transaction-mode `db` pool because it is called
-// from the Next.js Node runtime (not the Inngest worker) — see [R17].
+// Single `db` client throughout. The old transaction-mode/session-mode split
+// ([R17]) existed only to satisfy Supabase's Supavisor pooler; Cloud SQL has
+// one connection mode, so route handlers and the Inngest worker share it.
 
 import { db } from '@/db/client';
-import { workerDb } from '@/db/client-worker';
 import { reports } from '@/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
 
 export async function createReport(userId: string): Promise<string> {
-  const [row] = await workerDb
+  const [row] = await db
     .insert(reports)
     .values({ userId, status: 'queued' })
     .returning({ id: reports.id });
@@ -20,7 +18,7 @@ export async function createReport(userId: string): Promise<string> {
 }
 
 export async function markRunning(id: string): Promise<void> {
-  await workerDb
+  await db
     .update(reports)
     .set({ status: 'running', updatedAt: new Date() })
     .where(eq(reports.id, id));
@@ -32,7 +30,7 @@ export interface ReportSuccess {
 }
 
 export async function markSucceeded(id: string, r: ReportSuccess): Promise<void> {
-  await workerDb
+  await db
     .update(reports)
     .set({
       status: 'succeeded',
@@ -45,14 +43,14 @@ export async function markSucceeded(id: string, r: ReportSuccess): Promise<void>
 }
 
 export async function markFailed(id: string, errorMessage: string): Promise<void> {
-  await workerDb
+  await db
     .update(reports)
     .set({ status: 'failed', errorMessage, completedAt: new Date(), updatedAt: new Date() })
     .where(eq(reports.id, id));
 }
 
 export async function markNode(id: string, currentNode: string): Promise<void> {
-  await workerDb
+  await db
     .update(reports)
     .set({ currentNode, updatedAt: new Date() })
     .where(eq(reports.id, id));

@@ -1,5 +1,5 @@
 // Migration runner. Invoked via `pnpm db:migrate`.
-// Reads .env.local for WORKER_DATABASE_URL and applies SQL files from
+// Reads .env.local for DATABASE_URL and applies SQL files from
 // src/db/migrations/ in lexical order via Drizzle's stock migrator.
 
 import 'dotenv/config';
@@ -10,9 +10,9 @@ import postgres from 'postgres';
 
 loadEnv({ path: '.env.local' });
 
-const url = process.env.WORKER_DATABASE_URL;
+const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error('WORKER_DATABASE_URL is required.');
+  console.error('DATABASE_URL is required.');
   process.exit(1);
 }
 

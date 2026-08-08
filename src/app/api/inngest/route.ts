@@ -9,7 +9,7 @@
 //
 // The middleware matcher already excludes /api/inngest from auth gates.
 // This route must run on the Node.js runtime (not Edge) because the
-// Inngest worker executes runReport → workerDb (session-mode postgres-js,
+// Inngest worker executes runReport → db (unified Cloud SQL client,
 // which requires Node TCP sockets).
 
 export const runtime = 'nodejs';

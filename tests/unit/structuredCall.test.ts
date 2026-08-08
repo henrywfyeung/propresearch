@@ -10,8 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 const insertValues = vi.fn().mockResolvedValue(undefined);
-vi.mock('@/db/client-worker', () => ({
-  workerDb: {
+vi.mock('@/db/client', () => ({
+  db: {
     insert: () => ({ values: insertValues }),
     select: () => ({ from: () => ({ where: () => Promise.resolve([{ total: '0' }]) }) }),
   },
