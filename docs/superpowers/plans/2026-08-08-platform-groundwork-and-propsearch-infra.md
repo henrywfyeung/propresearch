@@ -91,15 +91,41 @@ Expected: `0`
 grep "will be created" /tmp/fungi-baseline-plan.txt
 ```
 
-Expected: entries for resources that already exist live, which is the drift. Based on the drift note, expect some subset of:
+Expected — **measured on 2026-08-08, `Plan: 10 to add, 1 to change, 0 to destroy`**. The drift is
+broader than fungi's own drift note claims: it lists 5 resources, but 5 more IAM bindings were
+also granted live.
 
 ```
-  # google_storage_bucket.receipts will be created
-  # google_cloud_scheduler_job.recurring will be created
-  # google_monitoring_notification_channel.email will be created
-  # google_monitoring_alert_policy.web_5xx will be created
-  # google_monitoring_alert_policy.sql_disk will be created
+google_cloud_run_v2_service_iam_member.blocking_create_invoker
+google_cloud_run_v2_service_iam_member.blocking_signin_invoker
+google_cloud_scheduler_job.recurring
+google_monitoring_alert_policy.sql_disk
+google_monitoring_alert_policy.web_5xx
+google_monitoring_notification_channel.email
+google_project_iam_member.web_run_roles["roles/firebaseauth.admin"]
+google_project_iam_member.web_run_roles["roles/firebasecloudmessaging.admin"]
+google_storage_bucket.receipts
+google_storage_bucket_iam_member.web_receipts
 ```
+
+- [ ] **Step 4b: Inspect the single in-place change and confirm it is safe**
+
+```bash
+awk '/# google_cloud_run_v2_service.fungi_web will be updated/,/^    }$/' \
+  /tmp/fungi-baseline-plan.txt | grep -E "^\s*[-+~]|env \{|name|value"
+```
+
+Expected: exactly two env changes on `fungi-web` — `RECEIPTS_BUCKET` removed, `NODE_ENV=production`
+added. This is drift from fungi's manual gcloud deploy (revision `00014`), which set env vars
+Terraform never knew about.
+
+**This was verified safe on 2026-08-08 and requires no action.** `apps/web/lib/storage.ts:7` reads
+`process.env.RECEIPTS_BUCKET ?? "fungi-family-receipts"` — the fallback is the identical bucket
+name, so dropping the variable resolves to the same bucket.
+
+**If the diff shows anything beyond those two env vars, STOP and report.** Any other change to
+`fungi_web` means further manual drift that must be understood before applying, because this plan
+must not alter a working app's behaviour.
 
 - [ ] **Step 5: Record the baseline for the next task**
 
@@ -116,97 +142,226 @@ There is nothing to commit — this task is pure assessment.
 
 ## Task 2: Import the drifted resources into state
 
-**Repo: fungi.** Bring live-created resources under Terraform management so later `apply` runs are safe. Import mutates state only, never infrastructure.
+**Repo: fungi.** Bring the 10 live-created resources under Terraform management so later `apply` runs are safe. Import mutates state only, never infrastructure.
 
-**Files:** none (state only)
+This task uses **Terraform `import` blocks** rather than `terraform import` CLI calls. With 10 resources that matters: the IDs land in a reviewable file, and `terraform plan` shows `will be imported` for each one *before* anything is written to state. A CLI import is 10 unreviewable side effects.
 
-- [ ] **Step 1: Confirm each resource genuinely exists live before importing**
+All IDs below were captured live on 2026-08-08 and are exact. Verify they still match in Step 1 rather than trusting them blindly.
+
+**Files:**
+- Create (then delete in Step 6): `/Users/henry/Desktop/fungi/infra/imports.tf`
+- Modify: `/Users/henry/Desktop/fungi/infra/run.tf` (declare RECEIPTS_BUCKET, Step 2b)
+
+- [ ] **Step 1: Re-verify the live identifiers**
 
 ```bash
+export PATH="/usr/local/share/google-cloud-sdk/bin:$PATH"
 gcloud storage buckets describe gs://fungi-family-receipts --format="value(name)"
-gcloud scheduler jobs describe fungi-recurring --location=asia-southeast1 --format="value(name)"
-gcloud alpha monitoring channels list --format="value(name,displayName)"
-gcloud alpha monitoring policies list --format="value(name,displayName)"
+gcloud scheduler jobs describe fungi-recurring --location=asia-southeast1 \
+  --project fungi-family --format="value(name)"
 ```
 
-Expected: the bucket name, the scheduler job name, one email channel, and two alert policies. Note the full channel/policy resource IDs — imports need them verbatim.
+Expected: `gs://fungi-family-receipts` and the scheduler job resource name.
 
-- [ ] **Step 2: Import the receipts bucket**
+`gcloud alpha`/`beta` are **not installed** in this environment and cannot be added non-interactively, so use the Monitoring REST API for channel and policy IDs:
+
+```bash
+TOKEN=$(gcloud auth application-default print-access-token)
+for kind in notificationChannels alertPolicies; do
+  curl -s -H "Authorization: Bearer $TOKEN" \
+    "https://monitoring.googleapis.com/v3/projects/fungi-family/$kind" \
+  | python3 -c "
+import sys,json
+k='$kind'
+d=json.load(sys.stdin)
+for x in d.get(k[0].lower()+k[1:], d.get(k, [])):
+    print(' ', x['name'], '|', x.get('displayName'))
+"
+done
+```
+
+Expected, as measured:
+
+```
+  projects/fungi-family/notificationChannels/2579346844929199402 | fungi admin email
+  projects/fungi-family/alertPolicies/17395888917638656676 | fungi-web 5xx errors
+  projects/fungi-family/alertPolicies/5777355760152144345 | Cloud SQL disk > 85%
+```
+
+If any ID differs, use the live value in Step 2.
+
+- [ ] **Step 2: Write the import blocks**
+
+Create `/Users/henry/Desktop/fungi/infra/imports.tf`. This file is temporary and is deleted in Step 6.
+
+```hcl
+# TEMPORARY -- delete after `apply` completes the imports (Task 2, Step 6).
+#
+# These 10 resources were created live (manual gcloud during the phase-0
+# session) and exist in code but not in state, so any apply would fail with
+# "already exists". fungi's own drift note lists only 5 of them; the 5 IAM
+# bindings below were found by `terraform plan` on 2026-08-08.
+
+import {
+  to = google_storage_bucket.receipts
+  id = "fungi-family-receipts"
+}
+
+import {
+  to = google_storage_bucket_iam_member.web_receipts
+  id = "b/fungi-family-receipts roles/storage.objectAdmin serviceAccount:fungi-web-run@fungi-family.iam.gserviceaccount.com"
+}
+
+import {
+  to = google_cloud_scheduler_job.recurring
+  id = "projects/fungi-family/locations/asia-southeast1/jobs/fungi-recurring"
+}
+
+import {
+  to = google_monitoring_notification_channel.email
+  id = "projects/fungi-family/notificationChannels/2579346844929199402"
+}
+
+import {
+  to = google_monitoring_alert_policy.web_5xx
+  id = "projects/fungi-family/alertPolicies/17395888917638656676"
+}
+
+import {
+  to = google_monitoring_alert_policy.sql_disk
+  id = "projects/fungi-family/alertPolicies/5777355760152144345"
+}
+
+import {
+  to = google_project_iam_member.web_run_roles["roles/firebaseauth.admin"]
+  id = "fungi-family roles/firebaseauth.admin serviceAccount:fungi-web-run@fungi-family.iam.gserviceaccount.com"
+}
+
+import {
+  to = google_project_iam_member.web_run_roles["roles/firebasecloudmessaging.admin"]
+  id = "fungi-family roles/firebasecloudmessaging.admin serviceAccount:fungi-web-run@fungi-family.iam.gserviceaccount.com"
+}
+
+# Blocking functions are allow-unauth (GCIP sends no Authorization header), so
+# the invoker member is allUsers -- see infra/blocking.tf.
+import {
+  to = google_cloud_run_v2_service_iam_member.blocking_create_invoker
+  id = "projects/fungi-family/locations/asia-southeast1/services/fungi-allowlist-blocker-create roles/run.invoker allUsers"
+}
+
+import {
+  to = google_cloud_run_v2_service_iam_member.blocking_signin_invoker
+  id = "projects/fungi-family/locations/asia-southeast1/services/fungi-allowlist-blocker-signin roles/run.invoker allUsers"
+}
+```
+
+- [ ] **Step 2b: Declare `RECEIPTS_BUCKET` in Terraform instead of letting it be stripped**
+
+Task 1 Step 4b established that Terraform would remove `RECEIPTS_BUCKET` from the live `fungi-web`
+service, and that this is harmless because the code falls back to the same value. Harmless is not
+the same as correct: a production bucket name should be declared configuration, not a hardcoded
+fallback in `apps/web/lib/storage.ts`.
+
+Add to the `containers` block in `/Users/henry/Desktop/fungi/infra/run.tf`, next to the existing
+`NODE_ENV` env entry:
+
+```hcl
+      env {
+        name  = "RECEIPTS_BUCKET"
+        value = google_storage_bucket.receipts.name
+      }
+```
+
+Referencing the resource rather than a literal means the two can never drift apart. This narrows
+the `fungi-web` diff to adding `NODE_ENV=production` — which the live service is currently missing
+and should have.
+
+- [ ] **Step 3: Plan and assert 10 imports, 0 creates, 0 destroys**
 
 ```bash
 cd /Users/henry/Desktop/fungi
-terraform -chdir=infra import google_storage_bucket.receipts fungi-family-receipts
+terraform -chdir=infra plan -input=false -no-color 2>&1 | tee /tmp/fungi-import-plan.txt
+grep -E "^Plan:" /tmp/fungi-import-plan.txt
 ```
 
-Expected: `Import successful!`
+Expected: `Plan: 0 to add, 1 to change, 0 to destroy, 10 to import.`
 
-If the address `google_storage_bucket.receipts` does not exist in the config, read `infra/storage.tf` and use the actual resource name. Do not invent resources.
-
-- [ ] **Step 3: Import the scheduler job**
+The remaining change must now be **only** the `NODE_ENV` addition. Confirm:
 
 ```bash
-terraform -chdir=infra import google_cloud_scheduler_job.recurring \
-  projects/fungi-family/locations/asia-southeast1/jobs/fungi-recurring
+awk '/# google_cloud_run_v2_service.fungi_web will be updated/,/^    }$/' \
+  /tmp/fungi-import-plan.txt | grep -E "^\s*[-+]"
 ```
 
-Expected: `Import successful!`
-
-- [ ] **Step 4: Import the monitoring channel and both policies**
-
-Substitute the exact IDs captured in Step 1:
+Expected: a single `+ name = "NODE_ENV"` / `+ value = "production"` pair and nothing removed.
 
 ```bash
-terraform -chdir=infra import google_monitoring_notification_channel.email \
-  projects/fungi-family/notificationChannels/<CHANNEL_ID>
-terraform -chdir=infra import google_monitoring_alert_policy.web_5xx \
-  projects/fungi-family/alertPolicies/<WEB_5XX_POLICY_ID>
-terraform -chdir=infra import google_monitoring_alert_policy.sql_disk \
-  projects/fungi-family/alertPolicies/<SQL_DISK_POLICY_ID>
+grep -c "will be imported" /tmp/fungi-import-plan.txt   # expect 10
+grep -c "will be created"  /tmp/fungi-import-plan.txt   # expect 0
+grep -c "will be destroyed" /tmp/fungi-import-plan.txt  # expect 0
 ```
 
-Expected: `Import successful!` for each.
+The `1 to change` is the verified-safe `fungi-web` env drift from Task 1 Step 4b.
 
-- [ ] **Step 5: Re-plan and assert the drift is gone**
+**If any resource still shows `will be created`, its import ID is wrong.** Fix the ID; do not apply. Applying a create against an existing resource fails, and worse, a wrong-but-valid ID silently binds state to the wrong object.
 
-```bash
-terraform -chdir=infra plan -no-color 2>&1 | tee /tmp/fungi-postimport-plan.txt
-grep -c "will be created" /tmp/fungi-postimport-plan.txt
-grep -c "will be destroyed" /tmp/fungi-postimport-plan.txt
-```
-
-Expected: `0` creates and `0` destroys. In-place *changes* are acceptable and expected — imported resources often differ in optional fields from the config. Inspect each one:
-
-```bash
-grep -A15 "will be updated in-place" /tmp/fungi-postimport-plan.txt
-```
-
-For any diff where the config is *less* correct than reality, fix the config to match reality rather than letting Terraform overwrite a working resource.
-
-- [ ] **Step 6: Apply to settle any benign in-place diffs**
+- [ ] **Step 4: Apply the imports**
 
 ```bash
 terraform -chdir=infra apply
 ```
 
-Expected: `Apply complete!` with only in-place updates.
+Expected: `Apply complete! Resources: 10 imported, 0 added, 1 changed, 0 destroyed.`
 
-- [ ] **Step 7: Commit any config corrections**
+- [ ] **Step 5: Confirm state is now clean**
+
+```bash
+terraform -chdir=infra plan -input=false -no-color 2>&1 | grep -E "^Plan:|No changes"
+```
+
+Expected: `No changes. Your infrastructure matches the configuration.`
+
+This is the gate for the whole plan. **Do not start Task 3 until this reports no changes** — every later task asserts "exactly N creates", which is only meaningful from a clean baseline.
+
+- [ ] **Step 6: Delete the temporary import file**
+
+```bash
+rm /Users/henry/Desktop/fungi/infra/imports.tf
+terraform -chdir=infra plan -input=false -no-color 2>&1 | grep -E "^Plan:|No changes"
+```
+
+Expected: still `No changes.` Import blocks are one-shot instructions, not persistent state; removing the file changes nothing.
+
+- [ ] **Step 7: Commit**
+
+Only `imports.tf` was created and it has been deleted, so there may be nothing to commit — import changed remote state, not files. Record the reconciliation anyway so the drift history is legible:
 
 ```bash
 cd /Users/henry/Desktop/fungi
 git checkout -b feat/platform-groundwork
-git add infra/
-git commit -m "infra: reconcile Terraform state with live-created resources
+git commit --allow-empty -m "infra: reconcile Terraform state with 10 live-created resources
 
-Import the receipts bucket, fungi-recurring scheduler, and monitoring
-channel + two alert policies, all of which were created live and were
-absent from state. Without this, any apply fails with 'already exists'.
+storage.tf, scheduler.tf and monitoring.tf existed in code while their
+resources were created live during the manual phase-0 session, so any apply
+failed with 'already exists'. Imported via one-shot import blocks:
+
+  receipts bucket + its objectAdmin binding
+  fungi-recurring scheduler job
+  monitoring email channel + web_5xx + sql_disk policies
+  web_run firebaseauth.admin + firebasecloudmessaging.admin bindings
+  both blocking-function allUsers invoker bindings
+
+fungi's drift note listed only the first five; terraform plan found the rest.
+
+Also settles one in-place diff on fungi-web: manual deploy set
+RECEIPTS_BUCKET, which Terraform does not declare. Verified harmless --
+apps/web/lib/storage.ts:7 falls back to the identical bucket name.
+
+terraform plan now reports no changes, which is the required baseline for
+adding platform resources.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
-
-If Step 5 required no config edits, `git commit` will report nothing to commit — that is a valid outcome, since import only changed remote state.
-
 ---
 
 ## Task 3: Harden the shared Cloud SQL instance
