@@ -1,93 +1,134 @@
-# Production CD — every push to main runs the test gate, then builds and deploys
-# to Vercel via the CLI. Codified here (not the Vercel Git integration) so the
-# whole pipeline lives in the repo.
-#
-# DORMANT UNTIL CONFIGURED: the `deploy` job is skipped (workflow stays green)
-# until VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are set as repo secrets.
-# So merging this file does not fail before Vercel setup is done. See docs/deploy.md.
+name: Deploy
 
-name: Deploy (production)
+# Build both images, push to the shared Artifact Registry, migrate, then deploy.
+#
+# Replaces the Vercel pipeline. Keyless via Workload Identity Federation -- no
+# service-account JSON key exists. Images are built in this runner and pushed
+# straight to Artifact Registry, so CI needs no Cloud Build role and no
+# project-wide storage permission (which would have let it reach fungi's
+# buckets).
 
 on:
   push:
     branches: [main]
-  workflow_dispatch: {} # manual redeploy from the Actions tab
+  workflow_dispatch:
 
-# Never run two production deploys at once; don't cancel one mid-flight.
+# One deploy at a time; a queued run should supersede, not race.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  PROJECT_ID: fungi-family
+  REGION: asia-southeast1
+  REGISTRY: asia-southeast1-docker.pkg.dev
+  REPO: apps
+  INSTANCE: fungi-family:asia-southeast1:fungi-db
+  DB_NAME: propsearch
+
 jobs:
-  # Secrets can't be read in a job-level `if:`, so surface their presence as an
-  # output. ready=false → the deploy job is skipped cleanly (no red X).
-  check:
-    runs-on: ubuntu-latest
-    outputs:
-      ready: ${{ steps.s.outputs.ready }}
-    steps:
-      - id: s
-        env:
-          T: ${{ secrets.VERCEL_TOKEN }}
-          O: ${{ secrets.VERCEL_ORG_ID }}
-          P: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          if [ -n "$T" ] && [ -n "$O" ] && [ -n "$P" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Vercel secrets not set — skipping deploy. Add VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (see docs/deploy.md)."
-          fi
-
   deploy:
-    needs: check
-    if: needs.check.outputs.ready == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    # Required for the OIDC token that WIF exchanges.
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      # --- Build ---------------------------------------------------------
+      # Both targets share the builder stage, so Next.js compiles once.
+
+      - name: Build web image
+        run: |
+          docker build --target web \
+            -t "$REGISTRY/$PROJECT_ID/$REPO/propsearch-web:${{ github.sha }}" \
+            -t "$REGISTRY/$PROJECT_ID/$REPO/propsearch-web:latest" .
+
+      - name: Build worker image
+        run: |
+          docker build --target worker \
+            -t "$REGISTRY/$PROJECT_ID/$REPO/propsearch-worker:${{ github.sha }}" \
+            -t "$REGISTRY/$PROJECT_ID/$REPO/propsearch-worker:latest" .
+
+      - name: Push images
+        run: |
+          docker push --all-tags "$REGISTRY/$PROJECT_ID/$REPO/propsearch-web"
+          docker push --all-tags "$REGISTRY/$PROJECT_ID/$REPO/propsearch-worker"
+
+      # --- Migrate -------------------------------------------------------
+      # Runs before deploy so a new revision never starts against an older
+      # schema. The proxy gives a local socket with IAM auth, so no password
+      # is involved.
+
+      - name: Start Cloud SQL Auth Proxy
+        run: |
+          curl -sSL -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --auto-iam-authn --port 5432 "$INSTANCE" &
+          for i in $(seq 1 30); do
+            (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Run migrations
+        env:
+          # The IAM username is the CI service account minus the
+          # .gserviceaccount.com suffix; the @ must be percent-encoded.
+          DATABASE_URL: postgresql://propsearch-ci%40fungi-family.iam@127.0.0.1:5432/propsearch?sslmode=disable
+        run: pnpm db:migrate
 
-      # Defence-in-depth: a direct push to main (bypassing a PR) can't ship a
-      # broken build. Mirrors ci.yml.
-      - name: Lint
-        run: pnpm lint
-      - name: TypeScript
-        run: pnpm typecheck
-      - name: Unit tests
-        run: pnpm test
+      - name: Grant runtime access to migrated tables
+        env:
+          DATABASE_URL: postgresql://propsearch-ci%40fungi-family.iam@127.0.0.1:5432/propsearch?sslmode=disable
+        # Tables created by propsearch-ci are owned by that role and are
+        # invisible to the runtime service accounts until granted. Without this
+        # step a deploy succeeds and then every query fails with
+        # "permission denied for table".
+        run: pnpm db:grant
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+      # --- Deploy --------------------------------------------------------
+      # Terraform owns each service's shape and ignores the image tag, so
+      # updating the image here does not fight it.
 
-      # Cloud build (NOT --prebuilt): upload the source and let Vercel build it.
-      # This is the only way NEXT_PUBLIC_* vars inline correctly — they're baked
-      # in at build time, and Vercel injects the project's env vars into its own
-      # build, whereas a local `vercel build` does not see them. The lint/
-      # typecheck/test gate above is our build-correctness check; Vercel does the
-      # production build. VERCEL_ORG_ID/VERCEL_PROJECT_ID (job env) target the project.
-      - name: Deploy to production (Vercel cloud build)
-        id: deploy
+      - name: Deploy web
         run: |
-          url="$(vercel deploy --prod --yes --token="$VERCEL_TOKEN")"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployed → $url"
+          gcloud run deploy propsearch-web \
+            --image "$REGISTRY/$PROJECT_ID/$REPO/propsearch-web:${{ github.sha }}" \
+            --region "$REGION" --project "$PROJECT_ID" --quiet
+
+      - name: Deploy worker
+        run: |
+          gcloud run deploy propsearch-worker \
+            --image "$REGISTRY/$PROJECT_ID/$REPO/propsearch-worker:${{ github.sha }}" \
+            --region "$REGION" --project "$PROJECT_ID" --quiet
+
+      - name: Smoke check
+        run: |
+          WEB=$(gcloud run services describe propsearch-web --region "$REGION" \
+                  --project "$PROJECT_ID" --format='value(status.url)')
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "$WEB/login")
+          echo "GET $WEB/login -> $CODE"
+          test "$CODE" = "200"

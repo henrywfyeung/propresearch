@@ -22,7 +22,6 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  varchar,
 } from 'drizzle-orm/pg-core';
 
 // --------------------------------------------------------------------------
@@ -116,65 +115,6 @@ export const reports = pgTable(
     runningIdx: index('reports_running_idx').on(t.updatedAt).where(sql`status = 'running'`),
   }),
 );
-
-// --------------------------------------------------------------------------
-// audit_log — append-only, IDs-only payload (no listing fields) [R3].
-// --------------------------------------------------------------------------
-
-export const auditLog = pgTable(
-  'audit_log',
-  {
-    id: bigserial('id', { mode: 'number' }).primaryKey(),
-    action: text('action').notNull(), // 'report.requested' | 'report.succeeded' | 'user.purged' | ...
-    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
-    reportId: uuid('report_id').references(() => reports.id, { onDelete: 'set null' }),
-    details: jsonb('details').notNull(), // IDs + status + costs only; validated by Zod at write site
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    byActorCreated: index('audit_actor_created_idx').on(t.actorUserId, t.createdAt.desc()),
-    byActionCreated: index('audit_action_created_idx').on(t.action, t.createdAt.desc()),
-  }),
-);
-
-// --------------------------------------------------------------------------
-// nsw_vg_sales — bulk-ingested NSW Valuer General sales (open government data).
-// PostGIS Point geometry for spatial queries (ST_DWithin) in Node 03.
-// --------------------------------------------------------------------------
-
-export const nswVgSales = pgTable(
-  'nsw_vg_sales',
-  {
-    propId: text('prop_id').notNull(),
-    contractDate: timestamp('contract_date', { mode: 'date' }).notNull(),
-    purchasePrice: numeric('purchase_price', { precision: 14, scale: 2 }).notNull(),
-    address: text('address').notNull(),
-    suburb: varchar('suburb', { length: 80 }),
-    postcode: varchar('postcode', { length: 4 }),
-    district: text('district'),
-    zoneCode: varchar('zone_code', { length: 8 }),
-    propertyType: text('property_type'),
-    landAreaSqm: numeric('land_area_sqm', { precision: 12, scale: 2 }),
-    natureOfProperty: varchar('nature_of_property', { length: 8 }),
-    // `geom geometry(Point, 4326)` is added in 0001_postgis_pg_trgm.sql.
-    // Drizzle-kit doesn't model PostGIS types; application queries use the
-    // sql`` tag for ST_DWithin / ST_MakePoint.
-    settlementDate: timestamp('settlement_date', { mode: 'date' }),
-    ingestedAt: timestamp('ingested_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.propId, t.contractDate] }),
-    bySuburbPostcode: index('nsw_vg_suburb_postcode_idx').on(t.suburb, t.postcode),
-    byContractDate: index('nsw_vg_contract_date_idx').on(t.contractDate),
-    // GIST index on `geom` is created via raw SQL — Drizzle's index API
-    // doesn't support GIST opclasses against geometry types directly.
-  }),
-);
-
-// --------------------------------------------------------------------------
-// llm_calls — per-call ledger; the source of truth for cost reconstruction ([R24]).
-// --------------------------------------------------------------------------
-
 export const llmCalls = pgTable(
   'llm_calls',
   {
@@ -218,83 +158,3 @@ export const rateLimitCounters = pgTable(
     pk: primaryKey({ columns: [t.userId, t.day] }),
   }),
 );
-
-// --------------------------------------------------------------------------
-// report_versions — one row per generation, linked to the canonical R2 PDF.
-// [R7] versioning + history.
-// --------------------------------------------------------------------------
-
-export const reportVersions = pgTable(
-  'report_versions',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    reportId: uuid('report_id')
-      .notNull()
-      .references(() => reports.id, { onDelete: 'cascade' }),
-    version: integer('version').notNull(),
-    pdfUrl: text('pdf_url').notNull(),
-    stateSnapshotKey: text('state_snapshot_key'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    byReportVersion: uniqueIndex('report_versions_report_version_idx').on(t.reportId, t.version),
-  }),
-);
-
-// --------------------------------------------------------------------------
-// report_node_artifacts — mid-node durability side table [R21].
-// PK (reportId, node, itemKey) — the table that lets per-item work survive
-// a worker crash, since LangGraph's PostgresSaver only checkpoints at
-// super-step boundaries (CLAUDE.md §6.3).
-// --------------------------------------------------------------------------
-
-export const reportNodeArtifacts = pgTable(
-  'report_node_artifacts',
-  {
-    reportId: uuid('report_id')
-      .notNull()
-      .references(() => reports.id, { onDelete: 'cascade' }),
-    node: text('node').notNull(), // 'visionComps' | 'risks' | 'compose' | 'revise'
-    itemKey: text('item_key').notNull(), // compId | category | sectionId | 'iter-N'
-    revisionRound: integer('revision_round').notNull().default(0),
-    payload: jsonb('payload').notNull(),
-    costUsd: numeric('cost_usd', { precision: 10, scale: 6 }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.reportId, t.node, t.itemKey] }),
-  }),
-);
-
-// --------------------------------------------------------------------------
-// pending_stats_callbacks — durable retry queue for Domain stats events [R37].
-// --------------------------------------------------------------------------
-
-export const pendingStatsCallbacks = pgTable(
-  'pending_stats_callbacks',
-  {
-    id: bigserial('id', { mode: 'number' }).primaryKey(),
-    listingId: text('listing_id').notNull(),
-    payload: jsonb('payload').notNull(),
-    attempts: integer('attempts').notNull().default(0),
-    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
-    lastError: text('last_error'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    byNextAttempt: index('pending_stats_next_attempt_idx').on(t.nextAttemptAt),
-  }),
-);
-
-// --------------------------------------------------------------------------
-// Type exports for the app
-// --------------------------------------------------------------------------
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-export type Report = typeof reports.$inferSelect;
-export type NewReport = typeof reports.$inferInsert;
-export type LlmCall = typeof llmCalls.$inferSelect;
-export type NewLlmCall = typeof llmCalls.$inferInsert;
-export type ReportNodeArtifact = typeof reportNodeArtifacts.$inferSelect;
-export type ReportVersion = typeof reportVersions.$inferSelect;

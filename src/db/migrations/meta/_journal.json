@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779901701762,
-      "tag": "0000_past_infant_terrible",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1779901701763,
-      "tag": "0001_postgis_pg_trgm",
+      "when": 1786201331858,
+      "tag": "0000_absurd_starjammers",
       "breakpoints": true
     }
   ]
