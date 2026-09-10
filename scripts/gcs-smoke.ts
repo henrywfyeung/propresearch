@@ -1,5 +1,5 @@
-// scripts/s3-smoke.ts — prove the live S3 upload path works end-to-end.
-// Reads the sample PDF and uploads it to the configured bucket via uploadPdf (GCS).
+// scripts/gcs-smoke.ts — prove the live GCS upload path works end-to-end.
+// Reads the sample PDF and uploads it to the configured bucket via uploadPdf.
 // Usage: pnpm tsx scripts/gcs-smoke.ts   (loads GCS_BUCKET from .env.local)
 
 import { readFileSync } from 'node:fs';
